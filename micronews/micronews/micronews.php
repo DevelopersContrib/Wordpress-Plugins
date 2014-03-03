@@ -1,11 +1,11 @@
 <?php
 /*
-Plugin Name: Micronews
-Plugin URI:
-Description: Micronews
-Author: Zipsite
-Version: 1
-Author URI:
+Plugin Name:  Contrib Micronews
+Plugin URI:https://github.com/DevelopersContrib/Wordpress-Plugins/tree/master/micronews
+Description: Micronews allows you to embed a custom micro news into your domain powered by Wordpress.
+Author: Contrib.com
+Version: 1.0
+Author URI:Contrib.com
 */
 ?>
 

@@ -1,9 +1,12 @@
 <?php
 /*
 Plugin Name: Contrib Forms
-Plugin URI:
-Description: Contrib Forms
-Author: Zipsite
+Plugin URI: https://github.com/DevelopersContrib/Wordpress-Plugins/tree/master/contrib-forms
+Description: Contrib Forms allows you to add or embed Contrib forms into your wordpress posts or pages by calling the shortcodes  [contribform form="inquiry"]
+ [contribform form="partnership"]
+ [contribform form="offer"]
+ [contribform form="staffing"]  while in Text Mode.
+Author: Contrib.com
 Version: 1
 Author URI:
 */
