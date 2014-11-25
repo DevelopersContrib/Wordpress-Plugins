@@ -1,7 +1,7 @@
 <?php
 /*
 Plugin Name:  Contrib Widget
-Plugin URI:https://github.com/DevelopersContrib/Wordpress-Plugins/tree/master/micronews
+Plugin URI:https://github.com/DevelopersContrib/Wordpress-Plugins/tree/master/contrib-widget
 Description: Integrates contrib widget that will allow users to contribute time, content, distribution, apps.
 Author: Contrib.com
 Version: 1.0
