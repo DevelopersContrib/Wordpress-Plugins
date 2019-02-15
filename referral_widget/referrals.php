@@ -393,7 +393,6 @@ class Referrals {
 					jQuery('#form-brand').submit();
 				});
 			});
-		});
 		</script>
 	<?php
 	}
