@@ -67,6 +67,49 @@ class Referrals {
 		}
 	}
 	
+	
+	public function createApiCall($url, $method, $headers, $data = array(),$user=null,$pass=null)
+	{
+		if (($method == 'PUT') || ($method=='DELETE')){
+			$headers[] = 'X-HTTP-Method-Override: '.$method;
+		}
+
+		$handle = curl_init();
+		curl_setopt($handle, CURLOPT_URL, $url);
+		curl_setopt($handle, CURLOPT_HTTPHEADER, $headers);
+		curl_setopt($handle, CURLOPT_RETURNTRANSFER, true);
+		curl_setopt($handle, CURLOPT_SSL_VERIFYHOST, false);
+		curl_setopt($handle, CURLOPT_SSL_VERIFYPEER, false);
+			  
+		if ($user){
+		 curl_setopt($handle, CURLOPT_USERPWD, $user.':'.$pass);
+		} 
+
+		switch($method){
+			case 'GET':
+				break;
+			case 'POST':
+				curl_setopt($handle, CURLOPT_POST, true);
+				curl_setopt($handle, CURLOPT_POSTFIELDS, http_build_query($data));
+				break;
+			case 'PUT':
+				curl_setopt($handle, CURLOPT_CUSTOMREQUEST, 'PUT');
+				curl_setopt($handle, CURLOPT_POSTFIELDS, http_build_query($data));
+				break;
+			case 'DELETE':
+				curl_setopt($handle, CURLOPT_CUSTOMREQUEST, 'DELETE');
+				break;
+		}
+		$response = curl_exec($handle);
+		return $response;
+	}
+	
+	function referrals_main_menu(){
+		add_menu_page('Referrals', 'Referrals', 'manage_options', 'referrals_main_menu', array($this, 'referrals_main_page' ), '', 7);
+		add_submenu_page('referrals_main_menu', 'Campaigns', 'Campaigns', 'manage_options', 'referrals_main_menu',array($this, 'referrals_main_page' ));
+		add_submenu_page('referrals_main_menu', 'Api Key', 'Api Key', 'manage_options', 'my-menu2', array($this, 'referrals_api_key_page' ));
+	}
+	
 	public function widget_func( $atts ) {
 		extract( shortcode_atts( array( 'code' => ''), $atts ) );
 
@@ -81,16 +124,17 @@ class Referrals {
 	public function referrals_login() {
 		add_menu_page(__('Referrals'), __('Referrals'), 'read', 'referrals_login', array($this,'referrals_login_page'), '', 7);
 	}
-		
-	public function referrals_login_page(){
-		$API_KEY= "a088239f8263dc8f";
+	
+	public function referrals_api_key_page(){
 		$user_id = get_current_user_id();
-		$current_user = wp_get_current_user();
+
+		$referrals_api_key = get_user_meta( $user_id, 'referrals_api_key', true );
+		
+		if(!empty($_POST['user_api_key'])){
+			update_user_meta($user_id, 'referrals_api_key', $_POST['user_api_key']);
+		}
 		
 		?>
-		<style>
-			
-		</style>
 		<link href="<?=plugins_url('custom.css',__FILE__ )?>" rel="stylesheet" type="text/css" />
 		<div class="Referrals-custom-plugin">
 			<!-- tab section -->
@@ -104,7 +148,53 @@ class Referrals {
 						<div class="row">
 							<div class="col-md-12 text-center">
 								<a href="http://referrals.com/">
-									<img class="logo-img-ss" height="90" width="200" src="https://d1p6j71028fbjm.cloudfront.net/logos/logo-new-referral-1.png">
+									<img class="logo-img-ss" height="90" width="200" src="https://cdn.vnoc.com/logos/logo-referrals-header.png">
+								</a>
+								<h1>Is a Plugin for Referrals</h1>
+							</div>
+					   </div>
+					</div>
+					<div class="section-signup">
+						<div class="container register">
+							<div class="row">
+								<div class="">
+									<form method="POST">
+									  <div class="form-group">
+										<label for="">Api Key</label>
+										<input type="text" class="form-control" id="user_api_key" name="user_api_key" value="<?=$referrals_api_key?>">
+									  </div>
+									  <button type="submit" class="btn btn-default">Update</button>
+									</form>
+								</div>
+							</div>
+						</div>
+					</div>
+				</section>
+			</div>
+		   <!-- end tab-->
+		</div>
+	<?php
+	}
+		
+	public function referrals_login_page(){
+		$API_KEY= "a088239f8263dc8f";
+		$user_id = get_current_user_id();
+		$current_user = wp_get_current_user();		
+		?>
+		<link href="<?=plugins_url('custom.css',__FILE__ )?>" rel="stylesheet" type="text/css" />
+		<div class="Referrals-custom-plugin">
+			<!-- tab section -->
+			<div class="clear-section"></div>
+			<div class="vcp-tab-main">
+				<input id="tab1" type="radio" name="tabs" checked="">
+				<label id="lcustomfooter" for="tab1">Referrals Settings</label>
+				
+				<section id="content1">
+					<div class="vtab">
+						<div class="row">
+							<div class="col-md-12 text-center">
+								<a href="http://referrals.com/">
+									<img class="logo-img-ss" height="90" width="200" src="https://cdn.vnoc.com/logos/logo-referrals-header.png">
 								</a>
 								<h1>Is a Plugin for Referrals</h1>
 							</div>
@@ -266,10 +356,6 @@ class Referrals {
 		<?php
 	}
 	
-	public function referrals_main_menu() {
-		add_menu_page(__('Referrals'), __('Referrals'), 'read', 'referrals_main_menu', array($this,'referrals_main_page'), '', 7);
-	}
-		
 	public function referrals_main_page(){
 		$user_id = get_current_user_id();
 		$current_user = wp_get_current_user();
@@ -298,11 +384,7 @@ class Referrals {
 				$campaigns = $res['campaigns'];
 			}
 		}
-		
 		?>
-		<style>
-			
-		</style>
 		<link href="<?=plugins_url('custom.css',__FILE__ )?>" rel="stylesheet" type="text/css" />
 		<div class="Referrals-custom-plugin">
 			<!-- tab section -->
@@ -316,7 +398,7 @@ class Referrals {
 						<div class="row">
 							<div class="col-md-12 text-center">
 								<a href="http://referrals.com/">
-									<img class="logo-img-ss" height="90" width="200" src="https://d1p6j71028fbjm.cloudfront.net/logos/logo-new-referral-1.png">
+									<img class="logo-img-ss" height="90" width="200" src="https://cdn.vnoc.com/logos/logo-referrals-header.png">
 								</a>
 								<h1>Is a Plugin for Referrals</h1>
 							</div>
@@ -396,46 +478,6 @@ class Referrals {
 		</script>
 	<?php
 	}
-	
-	public function createApiCall($url, $method, $headers, $data = array(),$user=null,$pass=null)
-	{
-		if (($method == 'PUT') || ($method=='DELETE'))
-		{
-			$headers[] = 'X-HTTP-Method-Override: '.$method;
-		}
-
-		$handle = curl_init();
-		curl_setopt($handle, CURLOPT_URL, $url);
-		curl_setopt($handle, CURLOPT_HTTPHEADER, $headers);
-		curl_setopt($handle, CURLOPT_RETURNTRANSFER, true);
-		curl_setopt($handle, CURLOPT_SSL_VERIFYHOST, false);
-		curl_setopt($handle, CURLOPT_SSL_VERIFYPEER, false);
-			  
-		if ($user){
-		 curl_setopt($handle, CURLOPT_USERPWD, $user.':'.$pass);
-		} 
-
-		switch($method)
-		{
-			case 'GET':
-				break;
-			case 'POST':
-				curl_setopt($handle, CURLOPT_POST, true);
-				curl_setopt($handle, CURLOPT_POSTFIELDS, http_build_query($data));
-				break;
-			case 'PUT':
-				curl_setopt($handle, CURLOPT_CUSTOMREQUEST, 'PUT');
-				curl_setopt($handle, CURLOPT_POSTFIELDS, http_build_query($data));
-				break;
-			case 'DELETE':
-				curl_setopt($handle, CURLOPT_CUSTOMREQUEST, 'DELETE');
-				break;
-		}
-		$response = curl_exec($handle);
-		return $response;
-	}
 }
 
 add_action( 'plugins_loaded', array( 'Referrals', 'get_instance' ) );
-
-
