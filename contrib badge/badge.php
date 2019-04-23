@@ -76,17 +76,18 @@ function badge_widget_init() {
         extract($args);
 
         $badge_widget_logo = get_option('badge_widget_logo');
-		//$optionsright = get_option('badge_widget_right');
-		//$optionstop = get_option('badge_widget_top');
-		
+
 		$url = "http://api.contrib.com/request/getdomainaffiliateid?domain=".$_SERVER['SERVER_NAME']."&key=".md5('acting.com');
+		
 		$return = file_get_contents($url);
 		$data = json_decode($return);
 		if($data->success){
 			$affiliate_id = $data->affiliate_id;
 		}
+		
+		
         $str = '<div id="badge-container" style="position:relative;display:none;"><div id="badge" class="badge-postn" >
-			<a alt="Contrib" target="_blank" href="http://referrals.contrib.com/idevaffiliate.php?id='.$affiliate_id."&url=http://www.contrib.com/signup/firststep?domain=".$_SERVER['SERVER_NAME'].'">
+			<a alt="Contrib" target="_blank" href="http://referrals.contrib.com/idevaffiliate.php?id='.$affiliate_id."&url=https://www.contrib.com/signup/firststep?domain=".$_SERVER['SERVER_NAME'].'">
 				<img src="'.$badge_widget_logo.'">
 			</a>
 		</div></div>';
@@ -154,19 +155,28 @@ function badge_widget_init() {
 				right: '.(!empty($optionsright)?$optionsright:'90px;').';
 				z-index: 8888;
 			}*/
-			</style>
-			';
-			$str .= '
-				<script type="text/javascript">
-				jQuery( document ).ready( function() {
-					//jQuery("body").prepend(jQuery("#badge-container"));
-					jQuery("#badge-container").show();
-					jQuery("#badge").addClass("animated rotateIn r-d ");
+			</style>			
+			<script type="text/javascript">
+				var loadScript=function(a,b){
+					var c=document.createElement("script");
+					c.type="text/javascript",
+					c.readyState ? c.onreadystatechange=function(){
+					"loaded"!=c.readyState&&"complete"!=c.readyState||(c.onreadystatechange=null,b())
+					}:
+					c.onload=function(){b()},
+					c.src=a,
+					document.getElementsByTagName("head")[0].appendChild(c)
+				};
+				
+				loadScript("//cdnjs.cloudflare.com/ajax/libs/jquery/2.1.4/jquery.min.js",function(){
+					jQuery( document ).ready( function() {
+						jQuery("#badge-container").show();
+						jQuery("#badge").addClass("animated rotateIn r-d ");
+					});
 				});
 			</script>
-					';
+			';
 		echo $str;
-        // echo $after_widget;
     }
 
     register_sidebar_widget(array(__('Contrib Badge'), 'widgets'), 'badge_widget');
