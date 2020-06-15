@@ -1,0 +1,1711 @@
+<?php
+/*
+Plugin Name: VNOC Ultimate WP Plugin
+Plugin URI: 
+Version: 1.0
+Author: 
+Author 
+*/
+
+class VNOCUltimate {
+	private static $instance;
+	protected $templates;
+	
+	public static function get_instance() {
+		if ( null == self::$instance ) {
+			self::$instance = new VNOCUltimate();
+		} 
+		return self::$instance;
+	}
+	
+	private function __construct() {
+		$this->templates = array();
+		add_filter(
+			'page_attributes_dropdown_pages_args',
+			array( $this, 'register_vnoc_page_templates' ) 
+		);
+		add_filter(
+			'wp_insert_post_data', 
+			array( $this, 'register_vnoc_page_templates' ) 
+		);
+		add_filter(
+			'template_include', 
+			array( $this, 'view_vnoc_page_template') 
+		);
+		$this->templates = array(
+			'contact.php' => 'Contact',
+			'developers.php' => 'Developers',
+			'partner.php' => 'Partners',
+			'privacy.php' => 'Privacy',
+			'referral.php' => 'Referral',
+			'staffing.php' => 'Staffing',
+			'terms.php' => 'Terms',
+			'about.php' => 'About',
+		);
+		
+		add_action( 'wp_ajax_savefollowme', array($this,'savefollowme' ));
+		add_action( 'wp_ajax_savepage', array($this,'savepage' ));
+		add_action( 'wp_ajax_activateuppersidebarwidget', array($this,'activateuppersidebarwidget' ));
+		add_action( 'wp_ajax_activatesidebarwidget', array($this,'activatesidebarwidget' ));
+		
+		add_action( 'wp_ajax_approve_cs', array($this,'approve_cs' ));
+		
+		add_action('admin_menu', array($this,'vnoc_main_menu'));
+
+		add_shortcode( 'contentsubmission', array($this,'content_submission_shortcode' ));
+		add_shortcode( 'contrib_live_rep', array($this,'contrib_live_rep_script' ));
+		
+		add_shortcode( 'teampage', array($this,'teampage_script' ));
+		add_shortcode( 'theoretical', array($this,'theoretical_script' ));
+		
+		add_shortcode( 'token_details_widget', array($this,'token_details_widget_script' ));
+		add_shortcode( 'floating_buy_token_widget', array($this,'floating_buy_token_widget_script' ));
+		add_shortcode( 'earn_widget', array($this,'earn_widget_script' ));
+		add_shortcode( 'buy_token_form_widget', array($this,'buy_token_form_widget_script' ));
+		
+		add_shortcode( 'lead_contrib_widget_black', array($this,'lead_contrib_widget_black_script' ));
+		add_shortcode( 'lead_contrib_widget_gray', array($this,'lead_contrib_widget_gray_script' ));
+		
+		add_shortcode( 'contrib_micronews', array($this,'contrib_micronews_script' ));
+		
+		add_shortcode( 'contrib_rating', array($this,'contrib_rating_script' ));
+		
+		add_shortcode( 'contrib_footer', array($this,'contrib_footer_content' ));
+		
+		
+		$activate_sidebar_contrib_widget = get_option('activate_sidebar_contrib_widget');
+		if(!empty($activate_sidebar_contrib_widget)){
+			add_action('wp_footer', array($this,'do_sidebar_contrib_widget'));
+		}
+
+		$activate_upper_right_contrib_widget = get_option('activate_upper_right_contrib_widget');
+		if(!empty($activate_upper_right_contrib_widget)){
+			add_action('wp_footer', array($this,'do_upper_right_contrib_widget'));
+		}
+		
+		add_action('wp_head', array($this,'jquery_no_conflict'));
+		
+		
+		//--------content submission
+		add_action( 'pre_get_posts', 'add_my_post_types_to_query' ); 
+		function add_my_post_types_to_query( $query ) {
+			if ( is_home() && $query->is_main_query() )
+				$query->set( 'post_type', array( 'post', 'content_submission' ) );
+			return $query;
+		}
+		function create_posttype() {		 
+			register_post_type( 'content_submission',
+				array(
+					'labels' => array(
+						'name' => __( 'Content Submission' ),
+						'singular_name' => __( 'content_submission' )
+					),
+					'public' => true,
+					'has_archive' => true,
+					'rewrite' => array('slug' => 'content_submission'),
+					'show_in_rest' => true,
+					'show_ui'=>false
+		 
+				)
+			);
+		}
+		add_action( 'init', 'create_posttype' );
+		add_filter('kses_allowed_protocols', function ($protocols) { //allow data base64 images
+			$protocols[] = 'data';
+			return $protocols;
+		});
+		//----------
+	}
+	
+	public function activateuppersidebarwidget()
+	{
+		$deprecated = null;
+		$autoload = 'no';
+		$activate_upper_right_contrib_widget = $_POST['value'];
+		
+		if ( get_option( 'activate_upper_right_contrib_widget' ) !== false ) add_option( 'activate_upper_right_contrib_widget', $activate_upper_right_contrib_widget, $deprecated, $autoload );
+		
+		update_option( 'activate_upper_right_contrib_widget', $activate_upper_right_contrib_widget );
+	}
+	
+	public function approve_cs()
+	{
+		$cs_post_id = $_POST['value'];
+		$cs_post = get_post( $cs_post_id );
+		if(!empty($cs_post)){
+
+			update_post_meta($post_id, 'status', 'approved');
+			
+			$post_id = wp_insert_post(array (
+				'post_type' => 'post',
+				'post_author' => $cs_post->post_author,
+				'post_title' => $cs_post->post_title,
+				'post_content' => $cs_post->post_content,
+				'post_status' => 'publish',
+			));
+			
+			if($post_id){
+				$meta = get_post_meta( $cs_post_id );
+				
+				add_post_meta($post_id, 'author_name', $meta['author_name'][0]);
+				add_post_meta($post_id, 'author_email', $meta['author_email'][0]);
+				add_post_meta($post_id, 'author_bio', $meta['author_bio'][0]);
+				add_post_meta($post_id, 'author_website', $meta['author_website'][0]);
+				
+				if(!empty($meta['featured_image'][0])){
+					$this->Generate_Featured_Image($meta['featured_image'][0],$post_id);
+				}
+				echo get_permalink($post_id);
+			}
+		}
+		
+	}
+	
+	public function activatesidebarwidget()
+	{	
+		$deprecated = null;
+		$autoload = 'no';
+		$activate_sidebar_contrib_widget = $_POST['value'];
+		
+		if ( get_option( 'activate_sidebar_contrib_widget' ) !== false ) add_option( 'activate_sidebar_contrib_widget', $activate_sidebar_contrib_widget, $deprecated, $autoload );
+
+		update_option( 'activate_sidebar_contrib_widget', $activate_sidebar_contrib_widget );
+	}
+	
+	public function savefollowme(){
+	
+		$deprecated = null;
+		$autoload = 'no';
+		
+		$twitter = $_POST['twitter'];		
+		if ( get_option( 'followme_twitter' ) !== false ) add_option( 'followme_twitter', $twitter, $deprecated, $autoload );
+		update_option( 'followme_twitter', $twitter );
+		
+		$facebook = $_POST['facebook'];		
+		if ( get_option( 'followme_facebook' ) !== false ) add_option( 'followme_facebook', $facebook, $deprecated, $autoload );
+		update_option( 'followme_facebook', $facebook );
+		
+		$github = $_POST['github'];		
+		if ( get_option( 'followme_github' ) !== false ) add_option( 'followme_github', $github, $deprecated, $autoload );
+		update_option( 'followme_github', $github );
+	}
+	
+	public function savepage() {
+		$return = '';
+		if(isset($_POST['page'])){
+			switch($_POST['page']){
+				case 'contact':
+					$return = $this->set_page('Contact','contact','contact.php',$_POST['add']);
+				break;
+				case 'developers':
+					$return = $this->set_page('Developers','developers','developers.php',$_POST['add']);
+				break;
+				case 'partner':
+					$return = $this->set_page('Partner','partner','partner.php',$_POST['add']);
+				break;
+				case 'privacy':
+					$return = $this->set_page('Privacy','privacy','privacy.php',$_POST['add']);
+				break;
+				case 'referral':
+					$return = $this->set_page('Referral','referral','referral.php',$_POST['add']);
+				break;
+				case 'staffing':
+					$return = $this->set_page('Staffing','staffing','staffing.php',$_POST['add']);
+				break;
+				case 'terms':
+					$return = $this->set_page('Terms','terms','terms.php',$_POST['add']);
+				break;
+				case 'about':
+					$return = $this->set_page('About','about','about.php',$_POST['add']);
+				break;
+			}
+		}
+		
+		if(!empty($return)){
+			$return = get_permalink($return);
+		}
+		die($return);
+	}
+
+		
+	public function register_vnoc_page_templates( $atts ) {
+		$cache_key = 'page_templates-' . md5( get_theme_root() . '/' . get_stylesheet() );
+
+		$templates = wp_get_theme()->get_page_templates();
+		if ( empty( $templates ) ) {
+			$templates = array();
+		} 
+		wp_cache_delete( $cache_key , 'themes');
+
+		$templates = array_merge( $templates, $this->templates );
+		wp_cache_add( $cache_key, $templates, 'themes', 1800 );
+		return $atts;
+	}
+
+	public function view_vnoc_page_template( $template ) {
+		global $post;
+		if ( ! $post ) {
+			return $template;
+		}
+
+		if ( !isset( $this->templates[get_post_meta( 
+			$post->ID, '_wp_page_template', true 
+		)] ) ) {
+			return $template;
+		} 
+
+		$file = plugin_dir_path(__FILE__). get_post_meta( 
+			$post->ID, '_wp_page_template', true
+		);
+
+		if ( file_exists( $file ) ) {
+			return $file;
+		} else {
+			echo $file;
+		}
+		return $template;
+	}
+
+	public function vnoc_main_menu() {
+		add_menu_page(__('VNOC Ultimate WP Plugin'), __('VNOC Ultimate WP Plugin'), 'read', 'vnoc_main_menu', array($this,'vnoc_main_page'), '', 7);
+	}
+	
+	public function set_page($page_title, $slug, $page_file,$add)
+	{
+		$page_id = 0;
+		$deprecated = null;
+		$autoload = 'no';
+		
+		$activate_page = !empty($add)?1:'';
+		
+		if(!empty($activate_page)){
+			$page_id = $this->create_pages($page_title, $slug, $page_file);
+		}else{
+			if ( get_option( 'activate_'.$slug.'_page_id' ) !== false ){
+				wp_delete_post( get_option( 'activate_'.$slug.'_page_id' ), true);
+			}
+		}
+		
+		if ( get_option( 'activate_'.$slug.'_page' ) !== false ){			
+			add_option( 'activate_'.$slug.'_page', $page_id, $deprecated, $autoload );			
+			add_option( 'activate_'.$slug.'_page_id', $page_id, $deprecated, $autoload );
+		}
+
+		update_option( 'activate_'.$slug.'_page', $page_id );
+		update_option( 'activate_'.$slug.'_page_id', $page_id );
+	
+		return $page_id;
+	}
+	
+	public function vnoc_main_page(){
+		$activate_contact_page = get_option( 'activate_contact_page' );
+		$activate_developers_page = get_option( 'activate_developers_page' );
+		$activate_partner_page = get_option( 'activate_partner_page' );
+		$activate_privacy_page = get_option( 'activate_privacy_page' );
+		$activate_referral_page = get_option( 'activate_referral_page' );
+		$activate_staffing_page = get_option( 'activate_staffing_page' );
+		$activate_terms_page = get_option( 'activate_terms_page' );
+		$activate_about_page = get_option( 'activate_about_page' );
+		
+		$activate_sidebar_contrib_widget = get_option('activate_sidebar_contrib_widget');
+		$activate_upper_right_contrib_widget = get_option('activate_upper_right_contrib_widget');
+
+	?>
+	
+		<style>
+		@import url("https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css");
+		/* 1 column: 320px */
+		.vnoc-custom-plugin {
+		  margin: 30px auto 0;
+			width: 98%;
+		   font-family:arial !important;
+		}
+		.vnoc-custom-plugin .vcp-module {
+		  background-color: fafafa;
+		  border-radius: .25rem;
+		  margin-bottom: 1rem;
+		  text-align: center;
+		}
+		.vnoc-custom-plugin .vcp-box {
+		   padding: 30px;
+		   background: #fafafa;
+		   border: 1px solid #ddd;
+		   border-radius: 3px;
+		   display: block;
+		   text-decoration: none;
+		   color: #121212;
+		}
+		.vnoc-custom-plugin .vcp-box:hover {
+		   border:1px solid #aaa;
+		   background: #fff;
+		}
+		.vnoc-custom-plugin .vcp-box h4 {
+		   margin: 0px;
+		}
+		.vnoc-custom-plugin .vcp-box h3 {
+		   margin-top: 10px;
+		   color:#666;
+		}
+		.vnoc-custom-plugin .vcp-box img {
+		   width: 80px;
+		   height: 80px;
+		}
+		/* 2 columns: 600px */
+		@media only screen and (min-width: 600px) {
+		  .vnoc-custom-plugin .vcp-module {
+				float: left;
+				margin-right: 2.564102564102564%;
+				width: 48.717948717948715%;
+			}
+			.vnoc-custom-plugin .vcp-module:nth-child(2n+0) {
+				margin-right: 0;
+			}
+		}
+		/* 3 columns: 768px */
+		@media only screen and (min-width: 768px) {
+		  .vnoc-custom-plugin .vcp-module {
+				width: 31.623931623931625%;
+			}
+			.vnoc-custom-plugin .vcp-module:nth-child(2n+0) {
+				margin-right: 2.564102564102564%;
+			}
+			.vnoc-custom-plugin .vcp-module:nth-child(3n+0) {
+				margin-right: 0;
+			}
+		}
+		/* 4 columns: 992px and up */
+		@media only screen and (min-width: 992px) {
+		  .vnoc-custom-plugin .vcp-module {
+				width: 23.076923076923077%;
+			}
+			.vnoc-custom-plugin .vcp-module:nth-child(3n+0) {
+				margin-right: 2.564102564102564%;
+			}
+			.vnoc-custom-plugin .vcp-module:nth-child(4n+0) {
+				margin-right: 0;
+			}
+		}
+
+		/***** tabs ******/
+		.vnoc-custom-plugin .clear-section {
+		   clear:both;
+		}
+		.vcp-tab-main {
+		  width: auto;
+		  min-width: 320px;
+		  padding: 20px 50px 50px;
+		  margin: 0 auto;
+		  background: #fff;
+		}
+
+		.vcp-tab-main section {
+		  display: none;
+		  padding: 20px 15px 20px;
+		  border: 1px solid #ddd;
+		}
+
+		.vcp-tab-main input {
+		  display: none;
+		}
+
+		.vcp-tab-main label {
+		  display: inline-block;
+		  margin: 0 0 -1px;
+		  padding: 15px 25px;
+		  font-weight: 600;
+		  text-align: center;
+		  color: #bbb;
+		  border: 1px solid transparent;
+		}
+
+		.vcp-tab-main label:before {
+		  font-family: arial;
+		  font-weight: normal;
+		  margin-right: 10px;
+		}
+
+		.vcp-tab-main label:hover {
+		  color: #888;
+		  cursor: pointer;
+		}
+
+		.vcp-tab-main input:checked + label {
+		  color: #555;
+		  border: 1px solid #ddd;
+		  border-top: 2px solid orange;
+		  border-bottom: 1px solid #fff;
+		}
+
+		.vcp-tab-main #tab1:checked ~ #content1,
+		.vcp-tab-main #tab2:checked ~ #content2,
+		.vcp-tab-main #tab3:checked ~ #content3,
+		.vcp-tab-main #tab4:checked ~ #content4,
+		.vcp-tab-main #tab6:checked ~ #content6,
+		.vcp-tab-main #tab5:checked ~ #content5 {
+		  display: block;
+		}
+
+		@media screen and (max-width: 650px) {
+		  .vcp-tab-main label {
+			font-size: 0;
+		  }
+		  .vcp-tab-main label:before {
+			margin: 0;
+			font-size: 18px;
+		  }
+		}
+
+		@media screen and (max-width: 400px) {
+		  .vcp-tab-main label {
+			padding: 15px;
+		  }
+		}
+		.vcp-tab-main .vtab {
+		   padding: 0px 20px 20px 20px;
+		}
+		.vcp-tab-main .vtab h3 {
+		   font-size: 16px;
+		   border-bottom: 1px dashed #ddd;
+		   padding-bottom: 10px;
+		   margin-bottom: 10px;
+		}
+		.vtab .manage-footer-img {
+		   width:100%;
+		}
+		.vcp-footer-container {
+		   background: #333;
+		   color: #fff;
+		   padding: 10px 0px 20px;
+		}
+		.vcp-footer-container .col-group > div {
+		  padding: none;
+		}
+		.vcp-footer-container .col-group .footer-in {
+		   padding: 15px;
+		}
+		.vcp-footer-container .col-group .footer-in h3 {
+		   border:none;
+		   text-transform: uppercase;
+		   color:#fff;
+		}
+		.vcp-footer-container .footer-in .v-domain-desc {
+		   font-size: 13px;
+		}
+		.vcp-footer-container .footer-in .p-link {
+		   line-height: 6px;
+		}
+		.vcp-footer-container .footer-in .p-link a {
+		   text-decoration:none;
+		   color:#999;
+		   font-size: 13px;
+		}
+		.vcp-footer-container .v-socials img {
+		   width:40px;
+		}
+		.vcp-footer-container .col-group .footer-in .p-link a:hover {
+		   color:#fff;
+		}
+		@media screen and (min-width: 44em) {
+		  .vcp-footer-container .col-group {
+			overflow: hidden;
+		  }
+		  .vcp-footer-container .col-group > div {
+			float: left;
+			width: 50%;
+		  }
+		  .vcp-footer-container .col-group > div:nth-child(odd) {
+			clear: left;
+		  }
+		}
+		@media screen and (min-width: 64em) {
+		  .vcp-footer-container .col-group > div {
+			width: 25%;
+		  }
+		  .vcp-footer-container .col-group > div:nth-child(odd) {
+			clear: none;
+		  }
+		}
+
+		.vcp-footer-container-bottom {
+		   background: #222;
+		   color: #fff;
+		   padding: 10px 0px 5px;
+		   font-size: 13px;
+		}
+		.vcp-footer-container-bottom p a {
+		   color:#999;
+		   text-decoration: none;
+		   font-size: 13px;
+		   margin-right: 5px;
+		}
+		.vcp-footer-container-bottom p a:hover {
+		   color:#fff;
+		}
+		.vcp-footer-container-bottom .lcol {
+		   float:left;
+		}
+		.vcp-footer-container-bottom .rcol {
+		   float:right;
+		}
+		.scw {
+		   margin-bottom: 2px;
+		}
+		.scw input:checked + label {
+			color: #fff;
+			border: none;
+			padding: 6px;
+			background: orange;
+		}
+		.scw label {
+			display: inline-block;
+			margin: 0 0 -1px;
+			padding: 6px;
+			font-weight: 600;
+			text-align: center;
+			color: #bbb;
+			border: none;
+			background: #fafafa;
+		}
+		.vtab .col-md-3, .vtab .col-md-4 {
+		   border-bottom: 1px solid #ddd;
+		   padding-bottom: 10px;
+		   height:560px;
+		}
+		.vtab .mpages .mpages-in {
+		   background: #fafafa;
+		   border: 1px solid #ddd;
+		   padding: 10px 10px 20px 10px;
+		   margin-bottom: 25px;
+		   border-radius: 3px;
+		}
+		</style>
+
+		<div class="vnoc-custom-plugin">
+			<div class="vcp-module">
+			  <a data-target="#lcustomfooter" href="javascript:;" class="vcp-box">
+				 <h3>Custom Footer</h3>
+				 <div class="vcp-icon">
+					<img src="https://image.flaticon.com/icons/png/512/234/234117.png">
+				 </div>
+			  </a>
+			</div>
+		   <div class="vcp-module">
+			  <a data-target="#lcustompage" href="javascript:;" class="vcp-box">
+				 <h3>Custom Pages</h3>
+				 <div class="vcp-icon">
+					<img src="https://image.flaticon.com/icons/svg/234/234116.svg">
+				 </div>
+			  </a>
+			</div>
+		   <div class="vcp-module">
+			  <a data-target="#lcontribwidget" href="javascript:;" class="vcp-box">
+				 <h3>Contrib Widgets</h3>
+				 <div class="vcp-icon">
+					<img src="https://image.flaticon.com/icons/svg/234/234107.svg">
+				 </div>
+			  </a>
+			</div>
+		   <div class="vcp-module">
+			  <a data-target="#lliverep" href="javascript:;" class="vcp-box">
+				 <h3>Live Rep</h3>
+				 <div class="vcp-icon">
+					<img src="https://image.flaticon.com/icons/png/512/204/204316.png">
+				 </div>
+			  </a>
+			</div>
+			<div class="vcp-module">
+			  <a data-target="#contribiowidgets" href="javascript:;" class="vcp-box">
+				 <h3>CONTRIB.IO WIDGETS</h3>
+				 <div class="vcp-icon">
+					<img src="https://cdn.vnoc.com/assets/crypto-widget-app.jpg">
+				 </div>
+			  </a>
+			</div>
+			<div class="vcp-module">
+			  <a data-target="#contentsubmission" href="javascript:;" class="vcp-box">
+				 <h3>Content Submission</h3>
+				 <div class="vcp-icon">
+					<img src="https://image.flaticon.com/icons/svg/234/234116.svg">
+				 </div>
+			  </a>
+			</div>
+		   <!-- tab section -->
+		   <div class="clear-section"></div>
+		   <div class="vcp-tab-main">
+			 <input id="tab1" type="radio" name="tabs" checked="">
+			 <label id="lcustomfooter" for="tab1">Custom Footer</label>
+
+			 <input id="tab2" type="radio" name="tabs">
+			 <label id="lcustompage" for="tab2">Custom Pages</label>
+
+			 <input id="tab3" type="radio" name="tabs">
+			 <label id="lcontribwidget" for="tab3">Contrib Widgets</label>
+
+			 <input id="tab4" type="radio" name="tabs">
+			 <label id="lliverep" for="tab4">Live Rep</label>
+			 
+			 <input id="tab5" type="radio" name="tabs">
+			 <label id="contribiowidgets" for="tab5">Contrib.io Widgets</label>
+			 
+			 <input id="tab6" type="radio" name="tabs">
+			 <label id="contentsubmission" for="tab6">Content Submission</label>
+				
+			 <section id="content1">
+			 
+				<div class="vtab">
+					<h3>Footer Short Code</h3>
+					<div class="col-md-12">
+						
+						<p>
+						Please add this to your footer.php - &lt;?php echo do_shortcode( '[contrib_footer]'); ?&gt;
+						
+						</p>
+						
+					</div>
+				</div>
+				
+				<form>
+					<?php
+						$followme_twitter = get_option('followme_twitter');
+						$followme_facebook = get_option('followme_facebook');
+						$followme_github = get_option('followme_github');
+						
+					?>
+					<div class="form-group">
+						<label for="">Twitter</label>
+						<input type="text" class="form-control" id="txttwitter" value="<?=$followme_twitter?>" style="display:block;">
+					</div>
+					<div class="form-group">
+						<label for="">Github</label>
+						<input type="text" class="form-control" id="txtgithub" value="<?=$followme_github?>" style="display:block;">
+					</div>
+					<div class="form-group">
+						<label for="">Facebook</label>
+						<input type="text" class="form-control" id="txtfacebook" value="<?=$followme_facebook?>" style="display:block;">
+					</div>
+					<button type="button" id="btn-save-followme" class="btn btn-default">Save</button>
+				</form>
+				<script type="text/javascript">
+					jQuery(document).ready(function(){
+						jQuery('#btn-save-followme').click(function(){
+							var b = jQuery(this);
+							b.attr('disabled', 'disabled').html("Saving...");
+							jQuery.post(
+								"<?=get_site_url()?>/wp-admin/admin-ajax.php", 
+								{
+									action: 'savefollowme',
+									twitter: jQuery('#txttwitter').val(),
+									github: jQuery('#txtgithub').val(),
+									facebook: jQuery('#txtfacebook').val(),
+								}, 
+								function(response){
+									b.removeAttr('disabled').html('Save');
+								});
+						});
+					});
+				</script>
+			 </section>
+
+			 <section id="content2">
+				<div class="vtab">
+				   <h3>Manage Pages</h3>
+				   <div class="row">
+					 <ul class="list-unstyled mpages">
+						<?php
+							$pages = [
+								['Contact','contact',$activate_contact_page],
+								['Developers','developers',$activate_developers_page],
+								['Partner','partner',$activate_partner_page],
+								['Privacy','privacy',$activate_privacy_page],
+								['Referral','referral',$activate_referral_page],
+								['Staffing','staffing',$activate_staffing_page],
+								['Terms','terms',$activate_terms_page],
+								['About','about',$activate_about_page]
+							];
+							foreach($pages as $page ){
+						?>
+							<li class="col-md-2 text-center">
+							   <div class="mpages-in">
+								<?php
+									if(!empty($page[2])){
+										?>
+										<a class="link" href="<?=get_permalink($page[2])?>"><h4><?=$page[0]?></h4></a>
+										<?php
+									}else{
+										?>
+										<a class="link" href="javascript:;"><h4><?=$page[0]?></h4></a>
+										<?php
+									}
+								?>
+									<a data-page="<?=$page[1]?>" style="<?=empty($page[2])?'display:none':''?>" data-target="#frm_activate_<?=$page[1]?>_page" href="javascript:;" class="btn btn-primary vnoc_remove_page">Remove</a>
+									<a data-page="<?=$page[1]?>" style="<?=!empty($page[2])?'display:none':''?>" data-target="#frm_activate_<?=$page[1]?>_page" href="javascript:;" class="btn btn-primary vnoc_add_page">Add</a>
+									<!--<a href="javascript:;" class="btn btn-default">Edit</a>-->
+							   </div>
+							</li>
+						<?php
+							}
+						?>
+					 </ul>
+					 <script type="text/javascript">
+						jQuery(document).ready(function(){									
+							jQuery('.vnoc_add_page').click(function(){
+								var parent = jQuery(this).parent();
+								var b = jQuery(this);
+								b.attr('disabled', 'disabled').html("Adding...");
+								jQuery.post(
+									"<?=get_site_url()?>/wp-admin/admin-ajax.php", 
+									{
+										action: 'savepage',
+										add: 1,
+										page: jQuery(this).attr('data-page')
+									}, 
+									function(response){
+										parent.find('.vnoc_remove_page').show();
+										parent.find('.vnoc_add_page').hide();
+										b.removeAttr('disabled').html('Add');
+										b.parent().find('.link').attr('href',response);
+									}
+								);
+							});
+							
+							jQuery('.vnoc_remove_page').click(function(){
+								if(confirm('Are you sure you want to delete this page?')){
+									var parent = jQuery(this).parent();
+									var b = jQuery(this);
+									b.attr('disabled', 'disabled').html("Deleting...");
+									jQuery.post(
+										"<?=get_site_url()?>/wp-admin/admin-ajax.php", 
+										{
+											action: 'savepage',
+											add: 0,
+											page: jQuery(this).attr('data-page')
+										}, 
+										function(response){
+											parent.find('.vnoc_add_page').show();
+											parent.find('.vnoc_remove_page').hide();
+											b.removeAttr('disabled').html('Remove');
+											b.parent().find('.link').attr('href','javascript:;');
+										}
+									);
+								}
+							});
+						});
+						</script>
+				   </div>
+				</div>
+			 </section>
+
+			 <section id="content3">
+				<div class="vtab">
+				   <h3>Manage Contrib Widgets</h3>
+				   <div class="row">
+					 <div class="col-md-4 text-center">
+						<h4>Lead Widget</h4>
+						<p>This widget allows you to collect your leads and allow you to integrate into your favorite newsletter or lead management system.
+						<br><a target="_blank" href="https://contrib.us/apps/details/m/leadwidget" class="btn btn-primary btn-sm">
+						<b>View More</b>
+						</a>	
+						</p>
+						<p><img class="img-responsive" src="https://d2qcctj8epnr7y.cloudfront.net/uploads/apps-lead-widget2.png" style="display: inline-block;"></p>
+						<div class="scode-box">
+						   <div class="row">
+								<div class="col-md-12">
+									<p>Short Code</p>
+								</div>
+							  <div class="col-md-6">
+								 <p>Lead Widget Black</p>
+								 <p>[lead_contrib_widget_black]</p>
+							  </div>
+							  <div class="col-md-6">
+								 <p>Lead Widget Gray</p>
+								 <p>[lead_contrib_widget_gray]</p>
+							  </div>
+						   </div>
+						</div>
+					 </div>
+
+					 <div class="col-md-4 text-center">
+						<h4>Micro News Widget</h4>
+						<p>Create an easy update ticker on your site that you could post to your social sites for free.
+						<br><a target="_blank" href="https://contrib.us/apps/details/m/micronews" class="btn btn-primary btn-sm">
+						<b>View More</b>
+						</a>	
+						</p>
+						<p><img class="img-responsive" src="https://rdbuploads.s3.amazonaws.com/vnoc/apps_marketplace/apps-micronews.png" style="display: inline-block;"></p>
+						<div class="scode-box">
+						   <div class="row">
+								<div class="col-md-12">
+									<p>Short Code</p>
+									<p>[contrib_micronews]</p>
+								</div>
+						   </div>
+						</div>
+					 </div>
+				   
+					 <div class="col-md-4 text-center">
+						<h4>Rating Widget</h4>
+						<p>Create an easy rating widget on any page for free..
+						<br><a target="_blank" href="https://contrib.us/apps/details/m/rating" class="btn btn-primary btn-sm">
+						<b>View More</b>
+						</a>	
+						</p>
+						<p><img class="img-responsive" src="https://rdbuploads.s3.amazonaws.com/vnoc/apps_marketplace/apps-rating.png" style="display: inline-block;"></p>
+						<div class="scode-box">
+						   <div class="row">
+								<div class="col-md-12">
+									<p>Short Code</p>
+									<p>[contrib_rating]</p>
+								</div>
+						   </div>
+						</div>
+					 </div>
+					 
+					 
+					 
+					 <div class="col-md-6 text-center">
+						<h4>Sidebar Widget</h4>
+						<p>This widget allows you to share brands needs to your visitor
+
+						</p>
+						<p style="padding:10px;" class="text-muted">The Sharing Sidebar is the easiest way to increase sharing up to 2x over regular sharing buttons. It floats over the side of your page and automatically shows visitors the right sharing buttons for them.
+							<br><a target="_blank" href="https://contrib.us/apps/details/m/cwsidebar" class="btn btn-primary btn-sm">
+							<b>View More</b>
+						</a>
+						</p>
+						<p><img class="img-responsive" src="https://s3.amazonaws.com/assets.zipsite.net/images/lucille/sidebar-contrib-widget.png" style="display: inline-block;"></p>
+						<div class="scode-box">
+						   <div class="row">
+							  <div class="col-md-12">
+								 <div class="scw">
+								   <input <?=!empty($activate_upper_right_contrib_widget)?'checked' :''?> style="display:inline;" value="" id="side-contrib-widget" type="checkbox">
+								   <label id="lbl-side-contrib-widget" class="lbl-chk" for="side-contrib-widget">Activate</label>
+								 </div>
+							  </div>
+						   </div>
+						</div>
+					 </div>
+					 
+					 
+					 <div class="col-md-6 text-center">
+						<h4>Upper Right Widget</h4>
+						<p>This widget allows you to share brands needs to your visitor
+						
+						</p>
+						<p style="padding:10px;" class="text-muted">The Sharing Sidebar is the easiest way to increase sharing up to 2x over regular sharing buttons. It floats over the side of your page and automatically shows visitors the right sharing buttons for them.
+						<br><a target="_blank" href="https://contrib.us/apps/details/m/cwupper" class="btn btn-primary btn-sm">
+							<b>View More</b>
+						</a>
+						</p>
+						<p><img class="img-responsive" src="https://s3.amazonaws.com/assets.zipsite.net/images/lucille/upper-right.png" style="display: inline-block;"></p>
+						<div class="scode-box">
+						   <div class="row">
+							  <div class="col-md-12">
+								 <div class="scw">
+								   <input <?=!empty($activate_sidebar_contrib_widget)?'checked' :''?> style="display:inline;" value="" id="uprtop-contrib-widget"  type="checkbox">
+								   <label id="lbl-uprtop-contrib-widget" class="lbl-chk" for="uprtop-contrib-widget">Activate</label>
+								 </div>
+							  </div>
+						   </div>
+						</div>
+					 </div>
+					 
+					 <div class="col-md-6 text-center">
+						<h4>Team Page Widget</h4>
+						<p>Script that displays team members
+						
+						</p>
+						
+						<p><img class="img-responsive" src="https://d2qcctj8epnr7y.cloudfront.net/images/2013/apps-badge-team.png" style="display: inline-block;"></p>
+						<div class="scode-box">
+						   <div class="row">
+								<div class="col-md-12">
+									<p>Short Code</p>
+									<p>[teampage]</p>
+								</div>
+						   </div>
+						</div>
+					 </div>
+					 
+					 <div class="col-md-6 text-center">
+						<h4>Theoretical Widget</h4>
+						<p>You could use this script to show brand value/theoretical value of <?=$_SERVER['SERVER_NAME']?>
+						
+						</p>
+						
+						<p><img class="img-responsive" src="https://d2qcctj8epnr7y.cloudfront.net/images/2013/apps-badge-value.png" style="display: inline-block;"></p>
+						<div class="scode-box">
+						   <div class="row">
+								<div class="col-md-12">
+									<p>Short Code</p>
+									<p>[theoretical]</p>
+								</div>
+						   </div>
+						</div>
+					 </div>
+					 
+				   </div>
+				   
+				</div>
+			 </section>
+
+			 <section id="content4">
+				<div class="vtab">
+				   <h3>Contrib Live Rep</h3>
+				   <div class="row">
+					 <div class="col-md-3 text-center">
+						<p>Contrib Live Rep allows you to create a live chat discussion on your site for your visitors.
+						<br> <a target="_blank" href="https://contrib.us/apps/details/m/liverep" class="btn btn-primary btn-sm">
+						<b>View More</b>
+					</a>
+						</p>
+						<p><img class="img-responsive" src="https://d2qcctj8epnr7y.cloudfront.net/uploads/apps-liverep.jpg"></p>
+						<div class="scode-box">
+						   <div class="row">
+							  <div class="col-md-12">
+								 <p>Short Code</p>
+								 <p>[contrib_live_rep]</p>
+							  </div>
+						   </div>
+						</div>
+					 </div>
+				   </div>
+				</div>
+			 </section>
+			 
+			 <section id="content5">
+				<div class="vtab">
+				   <h3>Contrib.io Widgets</h3>
+				   <div class="row">
+					 <div class="col-md-3 text-center">
+						<h4>Token Details Widget</h4>
+						
+						<p><img class="img-responsive" src="https://cdn.vnoc.com/assets/crypto-widget-app.jpg"></p>
+						<div class="scode-box">
+						   <div class="row">
+							  <div class="col-md-12">
+								 <p>Short Code</p>
+								 <p>[token_details_widget]</p>
+							  </div>
+						   </div>
+						</div>
+					 </div>
+					 <div class="col-md-3 text-center">
+						<h4>Floating Buy Token Widget</h4>
+						
+						<p><img class="img-responsive" src="https://cdn.vnoc.com/assets/crypto-widget-app.jpg"></p>
+						<div class="scode-box">
+						   <div class="row">
+							  <div class="col-md-12">
+								 <p>Short Code</p>
+								 <p>[floating_buy_token_widget]</p>
+							  </div>
+						   </div>
+						</div>
+					 </div>
+					 <div class="col-md-3 text-center">
+						<h4>Earn Widget</h4>
+						
+						<p><img class="img-responsive" src="https://cdn.vnoc.com/assets/crypto-widget-app.jpg"></p>
+						<div class="scode-box">
+						   <div class="row">
+							  <div class="col-md-12">
+								 <p>Short Code</p>
+								 <p>[earn_widget]</p>
+							  </div>
+						   </div>
+						</div>
+					 </div>
+					 <div class="col-md-3 text-center">
+						<h4>Buy Token Form Widget</h4>
+						
+						<p><img class="img-responsive" src="https://cdn.vnoc.com/assets/crypto-widget-app.jpg"></p>
+						<div class="scode-box">
+						   <div class="row">
+							  <div class="col-md-12">
+								 <p>Short Code</p>
+								 <p>[buy_token_form_widget]</p>
+							  </div>
+						   </div>
+						</div>
+					 </div>
+				   </div>
+				</div>
+			 </section>
+			 <section id="content6">
+				<div class="vtab">
+				   <h3>Short Code</h3>
+					<div class="col-md-12">						
+						<p>
+						[contentsubmission]						
+						</p>
+						<style>
+							#tbl_content_submission {
+							  border-collapse: collapse;
+							  border-spacing: 0;
+							  width: 100%;
+							  border: 1px solid #ddd;
+							}
+
+							#tbl_content_submission th, #tbl_content_submission th td {
+							  text-align: left;
+							  padding: 8px;
+							}
+
+							#tbl_content_submission tr:nth-child(even){background-color: #f2f2f2}
+						</style>
+						<div style="overflow-x:auto;">
+						  <table id="tbl_content_submission">
+							<tr>
+							  <th>Title</th>
+							  <th>Author Name</th>
+							  <th>Author Email</th>
+							  <th>Author Website</th>
+							  <th>Action</th>
+							</tr>
+							<?php
+								$args = array(  
+									'post_type' => 'content_submission',
+									'post_status' => 'draft',
+									'orderby' => 'post_date', 
+									'order' => 'DESC', 
+								);
+
+								$loop = new WP_Query( $args ); 
+									
+								while ( $loop->have_posts() ) : $loop->the_post();
+									$_cs_post_id = get_the_ID();
+									//$featured_img = wp_get_attachment_image_src( $post->ID );
+									$meta = get_post_meta( $_cs_post_id );
+									$link = get_permalink( $_cs_post_id );
+									?>
+										<tr id="tr_cs_<?=$_cs_post_id?>">
+											<td><?php echo the_title()?></td>
+											<td><?php echo $meta['author_name'][0]?></td>
+											<td><?php echo $meta['author_email'][0]?></td>
+											<td><?php echo $meta['author_website'][0]?></td>
+											<td class="td_status_cs">
+												<?php 
+													$status = $meta['status'][0];
+													if($status=='pending'){
+												?>
+												<a class="" target="_blank" href="<?=$link?>&preview=true">View</a> &nbsp; 
+												<a data-id="<?=$_cs_post_id?>" class="approve_cs" href="javascript:;">Approve</a> &nbsp; 
+												<a data-id="<?=$_cs_post_id?>" class="disapprove_cs" href="javascript:;">Disapprove</a> &nbsp; 
+												<?php
+													}else{
+												?>
+													<a class="" target="_blank" href="<?=$link?>&preview=true">View</a> &nbsp; 
+												<?php
+													}
+												?>
+												<a data-id="<?=$_cs_post_id?>" class="delete_cs" href="javascript:;">Delete</a>
+											</td>
+										</tr>
+									<?php
+								endwhile;
+								wp_reset_postdata(); 
+							?>
+						  </table>
+						</div>
+					</div>
+				</div>
+			 </section>
+		  </div>
+		   <!-- end tab-->
+		</div>
+		<br style="clear:both;">
+		<script>
+			jQuery(document).ready(function(){
+				//---content submission---
+				jQuery('.approve_cs').click(function(){
+					var btn = jQuery(this);
+					jQuery.post(
+						"<?=get_site_url()?>/wp-admin/admin-ajax.php", 
+						{
+							action: 'approve_cs',
+							value: btn.attr('data-id'),
+						},
+						function(response){
+							btn.parents('tr').find('.td_status_cs').html('<a class="" target="_blank" href="'+response+'">View</a> &nbsp;<a class="" href="javascript:;">Approved</a> &nbsp; ');
+						}
+					);
+				});
+				//--------
+				
+				jQuery('a.vcp-box').click(function(){
+					jQuery(jQuery(this).attr('data-target')).trigger('click');
+				});
+
+				jQuery('#side-contrib-widget').change(function(){
+					activateSidebaWidget();
+				});
+				
+				function activateSidebaWidget()
+				{
+					var b = jQuery('#lbl-side-contrib-widget');
+					var check = jQuery('#side-contrib-widget').is(':checked');
+					if(check){
+						b.attr('disabled', 'disabled').html("Activating...");
+					}else{
+						b.attr('disabled', 'disabled').html("Deactivate...");
+					}
+					
+					jQuery.post(
+						"<?=get_site_url()?>/wp-admin/admin-ajax.php", 
+						{
+							action: 'activatesidebarwidget',
+							value: jQuery('#side-contrib-widget').is(':checked')?1:0,
+						}, 
+						function(response){
+							b.removeAttr('disabled').html("Activate");
+						}
+					);
+				}
+				
+				jQuery('#uprtop-contrib-widget').change(function(){
+					activateUpperRigthWidget();
+				});
+				
+				function activateUpperRigthWidget()
+				{
+					var b = jQuery('#lbl-uprtop-contrib-widget');
+					var check = jQuery('#uprtop-contrib-widget').is(':checked');
+					if(check){
+						b.attr('disabled', 'disabled').html("Activating...");
+					}else{
+						b.attr('disabled', 'disabled').html("Deactivate...");
+					}
+					
+					jQuery.post(
+						"<?=get_site_url()?>/wp-admin/admin-ajax.php", 
+						{
+							action: 'activateuppersidebarwidget',
+							value: jQuery('#uprtop-contrib-widget').is(':checked')?1:0,
+						},
+						function(response){
+							b.removeAttr('disabled').html("Activate");
+						}
+					);
+				}
+			});
+		</script>
+	<?php
+	}
+	
+	public function create_pages($title,$slug,$template)
+	{
+		$post_id = 0;
+		$_page_check = get_page_by_title($title);
+		$_page = array(
+			'post_type' => 'page',
+			'post_title' => $title,
+			'post_content' => '',
+			'post_status' => 'publish',
+			'post_author' => 1,
+			'post_slug' => $slug
+		);
+		if(!isset($_page_check->ID) && !$this->the_slug_exists($slug)){
+			$post_id = wp_insert_post($_page);
+			update_post_meta( $post_id, '_wp_page_template', $template );
+		}else{
+			$post_id = $_page_check->ID;
+		}
+		return $post_id;
+	}
+
+	public function the_slug_exists($post_name) {
+		global $wpdb;
+		if($wpdb->get_row("SELECT post_name FROM wp_posts WHERE post_name = '" . $post_name . "'", 'ARRAY_A')) {
+			return true;
+		} else {
+			return false;
+		}
+	}
+		
+	public function lead_contrib_widget_black_script($atts, $content = null) {
+		$html = '<script src="https://manage.vnoc.com/widgets/leads?domain='.$_SERVER['SERVER_NAME'].'&c=black"></script>';
+		return $html;
+	}
+
+	public function lead_contrib_widget_gray_script($atts, $content = null) {
+		$html = '<script src="https://manage.vnoc.com/widgets/leads?domain='.$_SERVER['SERVER_NAME'].'&c=gray"></script>';
+		return $html;
+	}
+	
+	function slugify ($string) {
+		$string = utf8_encode($string);
+		$string = iconv('UTF-8', 'ASCII//TRANSLIT', $string);   
+		$string = preg_replace('/[^a-z0-9- ]/i', '', $string);
+		$string = str_replace(' ', '-', $string);
+		$string = trim($string, '-');
+		$string = strtolower($string);
+
+		if (empty($string)) {
+			return 'n-a';
+		}
+
+		return $string;
+	}
+	
+	public function content_submission_shortcode() {
+		ob_start();
+		echo '<style>
+			.custw-article-form {
+				background: #f5f0f0;
+				padding: 10px;
+				border: 2px solid #ccc;
+				border-radius: 4px;
+				margin: 10px 5px;
+			}
+			.custw-form-control {
+				font-family: inherit;
+				background-color: #f8f8f8;
+				width: 100%;	
+				font-size: 1.1rem;
+				box-sizing: border-box;
+				border: 2px solid #ccc;
+				border-radius: 4px;
+				margin-bottom: 1rem;
+			}
+			select.custw-form-control {
+				padding: 12px 20px;
+			}
+			input[type=text].custw-form-control {	
+				background-image: url("https://image.flaticon.com/icons/png/128/1508/1508794.png");
+				background-size: 21px 21px;
+				background-position: 10px 10px; 
+				background-repeat: no-repeat;
+				padding: 12px 20px 12px 40px;
+			}
+			input[type=url].custw-form-control {	
+				background-image: url("https://image.flaticon.com/icons/png/128/1508/1508794.png");
+				background-size: 21px 21px;
+				background-position: 10px 10px; 
+				background-repeat: no-repeat;
+				padding: 12px 20px 12px 40px;
+			}
+			input[type=email].custw-form-control {	
+				background-image: url("https://image.flaticon.com/icons/png/128/1508/1508794.png");
+				background-size: 21px 21px;
+				background-position: 10px 10px; 
+				background-repeat: no-repeat;
+				padding: 12px 20px 12px 40px;
+			}
+			textarea.custw-form-control {
+				height: 120px;
+				background-image: url("https://image.flaticon.com/icons/png/128/1508/1508794.png");
+				background-size: 21px 21px;
+				background-position: 10px 10px; 
+				background-repeat: no-repeat;
+				padding: 12px 20px 12px 40px;
+				resize: none;
+			}
+			input[type=submit].custw-form-button {
+				font-family: inherit;
+				background-color: #4CAF50;
+				border: none;
+				color: white;
+				font-size: 1.1rem;
+				padding: 16px 32px;
+				text-decoration: none;
+				border-radius: 2px;
+				margin: 4px 2px;
+				cursor: pointer;
+			}
+			input[type=file].custw-form-control {
+				width: auto;
+				padding: 0px 10px 10px;
+			}
+			.custw-image-display {
+				margin-bottom: 1rem;
+			}
+			.custw-success-alert {
+				background: #d4edda;
+				box-sizing: border-box;
+				border: 2px solid #c3e6cb;
+				border-radius: 4px;
+				padding: 30px;
+				margin-bottom: 1rem;	
+			}
+			.custw-success-alert h2 {
+				margin-top: 0px;
+				margin-bottom: 0px;
+			}
+			.custw-success-alert h4 {
+				margin-top: 5px;
+				margin-bottom: 0px;
+			}
+			.custw-error-alert {
+				background: #f8d7da;
+				box-sizing: border-box;
+				border: 2px solid #f5c6cb;
+				border-radius: 4px;
+				padding: 15px;
+				margin-bottom: 1rem;	
+			}
+			.custw-error-alert h4 {
+				margin-top: 0px;
+				margin-bottom: 0px;
+			}
+			#editor {
+			  height: 200px;
+			  background: #fff;
+			}
+		</style>';
+		
+		if ( isset($_POST['submit_content'] ) ) {
+			/*$url = "https://e7lq80c199.execute-api.us-west-2.amazonaws.com/api1";
+			
+			$title = $_POST['title'];
+			$slug = $this->slugify($title);
+			$param = array(
+				"title"=>$_POST['title'],
+				"slug"=>$slug,
+				"content"=>$_POST['content_text'],
+				"author_name"=>$_POST['author_name1'],
+				"author_email"=>$_POST['author_email'],
+				"author_bio"=>$_POST['content_text'],
+				"author_website"=>$_POST['author_website'],
+				"image"=>$_POST['featured_image'],
+				"domain"=>$_SERVER['SERVER_NAME'],
+				"type"=>"article",
+				"key"=>"5c1bde69a9e783c7edc2e603d8b25023",
+				"request"=>"wp-contentsubmission"
+			);
+			
+			$header = array(
+				'Accept: application/json',
+				'Content-Type: application/json'
+			);
+						
+			$pload = array(
+				'method' => 'POST',
+				'headers' => $headers,
+				'body' => json_encode($param),
+				'timeout' => 25,
+			);
+
+			$res = wp_remote_post($url, $pload);*/
+			
+			$user_id = 0;
+			$author_email = $_POST['author_email'];
+			$author_name = $_POST['author_name1'];
+			$user_name = preg_replace('/\s+/', '', $author_name);
+			
+			if (!email_exists( $author_email ) ) {
+				$random_password = wp_generate_password( $length = 12, $include_standard_special_chars = false );
+				$user_id = wp_create_user( $user_name, $random_password, $author_email );
+			} else {
+				$random_password = 'User already exists.  Password inherited.';
+				$user = get_user_by( 'email',$author_email);
+				$user_id = $user->ID;
+			}
+
+			$post_id = wp_insert_post(array (
+				'post_author'=>$user_id,
+				'post_type' => 'content_submission',
+				'post_title' => $_POST['title'],
+				'post_content' => $_POST['content_text'],
+				//'post_status' => 'publish',
+				'post_status' => 'draft',
+				//'comment_status' => 'closed',   // if you prefer
+				//'ping_status' => 'closed',      // if you prefer
+			));
+			
+			//if(!empty($res['body']) && json_decode($res['body'])->success){
+			if($post_id){
+				add_post_meta($post_id, 'author_name', $_POST['author_name1']);
+				add_post_meta($post_id, 'author_email', $author_email);
+				add_post_meta($post_id, 'author_bio', $_POST['author_bio']);
+				add_post_meta($post_id, 'author_website', $_POST['author_website']);
+				
+				add_post_meta($post_id, 'status', 'pending');
+				
+				if(!empty($_POST['featured_image'])){
+					add_post_meta($post_id, 'featured_image', $_POST['featured_image']);
+					$this->Generate_Featured_Image($_POST['featured_image'],$post_id);
+				}
+				echo '<div id="submit_success" class="custw-article-form">	
+				<div class="custw-article-inner">
+					<div class="custw-article-group">
+						<div class="custw-success-alert">
+							<h2>Thank You!!</h2>
+							<h4>Your article has been submitted successfully.</h4>
+						</div>
+					</div>
+				</div>
+				<script>
+					var el = document.getElementById("submit_success");
+					el.scrollIntoView();
+				</script>
+				';
+			}else{
+				echo '<div id="submit_success" class="custw-article-form">	
+				<div class="custw-article-inner">
+					<div class="custw-article-group">
+						<div id="error_content" class="custw-error-alert">				
+							<h4>An error occurred please try again later</h4>
+						</div>
+					</div>
+				</div>
+				<script>
+					var el = document.getElementById("submit_success");
+					el.scrollIntoView();
+				</script>
+				';
+			}
+			
+		}else{	 
+			$html= '
+				<link href="'.esc_url( plugins_url( 'css/quill.snow.css', __FILE__ ) ).'" rel="stylesheet">
+				<script src="'.esc_url( plugins_url( 'js/quill.js', __FILE__ ) ).'"></script>			
+			<form action="' . $_SERVER['REQUEST_URI'] . '" method="post" onsubmit="return validateForm()">
+			<div class="custw-article-form">	
+				<div class="custw-article-inner">
+					<div class="custw-article-group">
+						<div id="error_content" class="custw-error-alert" style="display:none;">				
+							<h4>Please provide <span>content</span>!</h4>
+						</div>
+						<div class="custw-article-group">
+							<input value="" id="title" type="text" class="custw-form-control" name="title" placeholder="Article Title.." required>
+						</div>						
+						<div class="custw-article-group">
+							<div id="editor"></div>
+							<textarea style="display:none;" id="content_text" name="content_text"></textarea>
+						</div>						
+						<div class="custw-article-group" style="margin-top:10px;">
+							<input type="file" class="custw-form-control" name="fileInput" id="fileInput" accept="image/*">	
+							<span>Upload a feature image.</span>
+							<div class="custw-image-display">
+								<img style="display:none;" id="featured_img" src="https://via.placeholder.com/500" height="500">
+								<input id="featured_image" name="featured_image" type="hidden" />
+							</div>
+						</div>	
+						<div class="custw-article-group">
+							<input value="" type="text" class="custw-form-control" name="author_name1" placeholder="Author Name" required>
+						</div>						
+						<div class="custw-article-group">
+							<textarea class="custw-form-control" name="author_bio" placeholder="Author Bio"></textarea>
+						</div>						
+						<div class="custw-article-group">
+							<input value="" type="email" class="custw-form-control" name="author_email" placeholder="Author Email" required>
+						</div>						
+						<div class="custw-article-group">
+							<input type="url" pattern="https://.*" class="custw-form-control" name="author_website" placeholder="Author Website (https://www.website.com)">
+						</div>						
+						<div class="custw-article-group" style="float: right;margin-bottom:1rem;">
+							<input  name="submit_content" type="submit" class="custw-form-button" value="Submit">
+						</div>
+						<div style="clear:both;"></div>
+					</div>
+				</div>
+			</div>			
+			</form>
+			'."
+			<script>
+				var quill;
+				function validateForm(){
+					var error_content = document.getElementById('error_content');
+					error_content.style.display = 'none';
+					if(quill.getText().trim().length===0){						
+						error_content.style.display = 'block';
+						scrollTo('error_content');
+						return false;
+					}else{
+						var content = document.getElementById('content_text');
+						content.value = quill.root.innerHTML;
+					}
+					return true;
+				}
+				function scrollTo(el){
+					var el = document.getElementById(el);
+					el.scrollIntoView();
+				}
+				window.onload = function() {
+					quill = new Quill('#editor', {
+						modules: {
+							toolbar: [
+							[{ header: [1, 2, false] }],
+							['bold', 'italic', 'underline'],
+							['code-block'],
+							['link', 'blockquote', 'code-block'],
+							[{ list: 'ordered' }, { list: 'bullet' }, 'image']
+							]
+						},
+						placeholder: 'Compose an epic...',
+						theme: 'snow'
+					});
+					
+					var fileInput = document.getElementById('fileInput');
+					var output = document.getElementById('featured_img');
+					var buff = document.getElementById('buff');
+					fileInput.addEventListener('change', function(e) {
+						output.src = 'https://cdn.vnoc.com/widgets/widget-spinner.gif';
+						output.style.display = 'block';
+						var file = fileInput.files[0];
+						var imageType = /image.*/;
+						if (file.type.match(imageType)) {
+							var reader = new FileReader();
+							reader.onload = function(e) {
+								var data = new FormData();
+								data.append('image', reader.result);
+								var IMGUR_API_URL = 'https://www.contrib.com/image/upload';
+								var xhr = new XMLHttpRequest();
+								xhr.open('POST', IMGUR_API_URL, true);
+								xhr.onreadystatechange = function() {
+									if (xhr.readyState === 4) {
+										var response = JSON.parse(xhr.responseText);
+										if (response.status === 200 && response.success) {
+											output.src = response.data.link;											
+											var featured_image = document.getElementById('featured_image');
+											featured_image.value = response.data.link;
+										} else {
+											alert('an error occurred please try again later');
+										}
+									}
+								}
+								xhr.send(data);
+							}
+							reader.readAsDataURL(file);             
+						}
+					else{
+						output.innerHTML = 'File not supported!';
+					}
+					});
+				}
+			</script>
+			";
+			echo $html;
+		}
+		return ob_get_clean();
+	}
+
+	function Generate_Featured_Image( $image_url, $post_id  ){
+		$upload_dir = wp_upload_dir();
+		$image_data = file_get_contents($image_url);
+		$filename = basename($image_url);
+		if(wp_mkdir_p($upload_dir['path']))
+		  $file = $upload_dir['path'] . '/' . $filename;
+		else
+		  $file = $upload_dir['basedir'] . '/' . $filename;
+		file_put_contents($file, $image_data);
+
+		$wp_filetype = wp_check_filetype($filename, null );
+		$attachment = array(
+			'post_mime_type' => $wp_filetype['type'],
+			'post_title' => sanitize_file_name($filename),
+			'post_content' => '',
+			'post_status' => 'inherit'
+		);
+		$attach_id = wp_insert_attachment( $attachment, $file, $post_id );
+		require_once(ABSPATH . 'wp-admin/includes/image.php');
+		$attach_data = wp_generate_attachment_metadata( $attach_id, $file );
+		$res1= wp_update_attachment_metadata( $attach_id, $attach_data );
+		$res2= set_post_thumbnail( $post_id, $attach_id );
+	}
+	
+	public function contrib_live_rep_script($atts, $content = null) {
+		$html = '<div id="chat_content" data="'.$_SERVER['SERVER_NAME'].'"></div>'.
+			'<script type="text/javascript" src="https://tools.contrib.com/js/chat.js"></script>';
+		return $html;
+	}
+	
+	public function teampage_script($atts, $content = null) {
+		$html = '<script type="text/javascript" src="https://www.contrib.com/widgets/teammembersperdomain/'.$_SERVER['SERVER_NAME'].'"></script>';
+		return $html;
+	}
+	
+	public function theoretical_script($atts, $content = null) {
+		$html = '<script type="text/javascript" src="https://www.contrib.com/widgets/brandvalue/'.$_SERVER['SERVER_NAME'].'"></script>';
+		return $html;
+	}
+	
+	public function contrib_micronews_script($atts, $content = null) {
+		$html = '<script type="text/javascript" src="https://contrib.com/widgets?ma=micronews&dn='.$_SERVER['SERVER_NAME'].'"></script>';
+		return $html;
+	}
+	
+	public function contrib_rating_script($atts, $content = null) {
+		$html = '<script type="text/javascript" src="https://www.contrib.com/widgets?ma=rating"></script>';
+		return $html;
+	}
+
+	public function contrib_footer_content($atts, $content = null) {
+		$file = plugin_dir_path(__FILE__). get_post_meta($post->ID, '_wp_page_template', true);
+
+		$followme_twitter = get_option('followme_twitter');
+		$followme_facebook = get_option('followme_facebook');
+		$followme_github = get_option('followme_github');
+		$domain = $_SERVER['SERVER_NAME'];
+		$file = $file.'footer.php';
+		if ( file_exists( $file ) ) {
+			$f = file_get_contents($file);
+			$f = str_replace("followme_twitter",$followme_twitter,$f);
+			$f = str_replace("followme_facebook",$followme_facebook,$f);
+			$f = str_replace("followme_github",$followme_github,$f);
+			$f = str_replace("[domain]",$domain,$f);
+			return $f;
+		} else {
+			return 'Missing footer file.';
+		}
+	}
+	
+	public function do_upper_right_contrib_widget(){
+		echo '  <script src="https://tools.contrib.com/cwidget?d='.$_SERVER['SERVER_NAME'].'&p=ur&c=f"></script>    ';
+	}
+	
+	
+	public function do_sidebar_contrib_widget(){
+	   echo ' <script src="https://tools.contrib.com/cwidget?d='.$_SERVER['SERVER_NAME'].'&p=sb&c=f"></script>  ';
+	}
+	
+	public function token_details_widget_script($atts, $content = null) {
+		$domain = $_SERVER['SERVER_NAME'];
+		$domain = $domain == 'localhost' ? 'contrib.com':'';
+		$html = '<script type="text/javascript" src="https://tools.contrib.com/crypto?d='.$domain.'"></script>';
+		return $html;
+	}
+	
+	public function floating_buy_token_widget_script($atts, $content = null) {
+		$domain = $_SERVER['SERVER_NAME'];
+		$domain = $domain == 'localhost' ? 'contrib.com':'';
+		$html = '<script type="text/javascript" src="https://tools.contrib.com/cwidget/buytoken?d='.$domain.'"></script>';
+		return $html;
+	}
+	
+	public function earn_widget_script($atts, $content = null) {
+		$domain = $_SERVER['SERVER_NAME'];
+		$domain = $domain == 'localhost' ? 'contrib.com':'';
+		$html = '<script type="text/javascript" src="https://tools.contrib.com/crypto/eservices?d='.$domain.'"></script>';
+		return $html;
+	}
+	
+	public function buy_token_form_widget_script($atts, $content = null) {
+		$domain = $_SERVER['SERVER_NAME'];
+		$domain = $domain == 'localhost' ? 'contrib.com':'';
+		$html = '<script id="buytokens-widget" src="https://contrib.io/buytokens/widget/'.$domain.'" ></script>';
+		return $html;
+	}
+	
+	public function jquery_no_conflict()
+	{
+		echo ' <script>try{var $ = jQuery.noConflict();}catch(e){};'.
+		''.
+		" if (typeof jQuery === 'undefined') {".
+		' var c=document.createElement("script"); '.
+		' c.type="text/javascript", '.
+		' c.readyState ? c.onreadystatechange=function(){ '.
+		' 		"loaded"!=c.readyState&&"complete"!=c.readyState||(c.onreadystatechange=null,b()) '.
+		' 	}: '.
+		' 	c.onload=function(){}, '.
+		' c.src="//cdnjs.cloudflare.com/ajax/libs/jquery/2.1.4/jquery.min.js", '.
+		' document.getElementsByTagName("head")[0].appendChild(c) '.
+		" }  ".
+		'</script>  ';
+	}
+}
+
+add_action( 'plugins_loaded', array( 'VNOCUltimate', 'get_instance' ) );
+
+
+//add_action('wp_loaded', 'add_pages');
