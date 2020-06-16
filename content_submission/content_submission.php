@@ -1,10 +1,9 @@
 <?php
 /*
 Plugin Name: Content Submission Plugin
-Plugin URI: 
+Plugin URI: https://github.com/DevelopersContrib/Wordpress-Plugins/tree/master/content_submission
 Version: 1.0
-Author: 
-Author 
+Author: contrib.com
 */
 
 class ContentSubmission {
@@ -20,7 +19,7 @@ class ContentSubmission {
 	
 	private function __construct() {
 		$this->templates = array();
-		
+		add_action( 'wp_ajax_test_cs', array($this,'test' ));
 		add_action( 'wp_ajax_approve_cs', array($this,'approve_cs' ));
 		add_action( 'wp_ajax_delete_cs', array($this,'delete_cs' ));
 		add_action( 'wp_ajax_disapprove_cs', array($this,'disapprove_cs' ));
@@ -49,7 +48,7 @@ class ContentSubmission {
 					'has_archive' => true,
 					'rewrite' => array('slug' => 'content_submission'),
 					'show_in_rest' => true,
-					//'show_ui'=>false
+					'show_ui'=>false
 		 
 				)
 			);
@@ -69,20 +68,29 @@ class ContentSubmission {
 		die();
 	}
 	
+	public function test()
+	{
+		echo 'here';
+		$this->Generate_Featured_Image('https://i0.wp.com/instadesk.com/wp-content/uploads/2020/05/instagram-tricks-scaled.jpg',1);
+		die();
+	}
+	
 	public function disapprove_cs()
 	{
 		$cs_post_id = $_POST['value'];
 		$val = update_post_meta($cs_post_id, 'status', 'disapproved');
 		if($val){
-			$author_name = get_post_meta($cs_post_id, 'author_name',true );
+			$author_name = ucwords(get_post_meta($cs_post_id, 'author_name',true ));
 			$to = get_post_meta($cs_post_id, 'author_email',true );
 			$cs_post = get_post( $cs_post_id );
 			
-			$subject = 'Your article '.$cs_post->post_title.' has been disapproved';
-			$body = 'Your article '.$cs_post->post_title.' has been disapproved';
+			$subject = 'Your article "'.$cs_post->post_title.'" has been disapproved';
+			$body = "$author_name, ";
+			$body .= '<br> As much as we would like to accept your contributed post/article, we feel it can still be improved upon.';
+			$body .= '<br> Please resubmit or let us know if you feel that you deserve a spot in our site :)';
 			$headers = array('Content-Type: text/html; charset=UTF-8');
 			 
-			//wp_mail( $to, $subject, $body, $headers );
+			wp_mail( $to, $subject, $body, $headers );
 		}
 		$status = get_post_meta($cs_post_id, 'status',true );
 		echo json_encode(array('status'=>ucwords($status),'post_id'=>$cs_post_id,'disapprove'=>$val));
@@ -119,28 +127,37 @@ class ContentSubmission {
 				}
 				
 				$user_id = $cs_post->post_author;
-				$random_password = wp_generate_password( $length = 12, $include_standard_special_chars = false );
-				wp_set_password( $random_password, $user_id );
+				$reset_pass = get_user_meta( $user_id, 'reset_pass', true );
+				
+				if($reset_pass){
+					$random_password = wp_generate_password( $length = 12, $include_standard_special_chars = false );
+					wp_set_password( $random_password, $user_id );
+				}
 				
 				$author_name = $meta['author_name'][0];
 				$to = $meta['author_email'][0];
 				$cs_post = get_post( $cs_post_id );
 				
-				$subject = 'Your article '.$cs_post->post_title.' has been approved';
-				$body = 'Your article '.$cs_post->post_title.' has been approved';
-				$body .='<br> Your Login Account: '.$meta['author_email'][0]; 
-				$body .='<br> Your Temporary Password: '.$random_password ; 
+				$subject = 'Congratulations! your article "'.$cs_post->post_title.'" has been approved';
+				$body = "Congratulations $author_name,";
+				$body .= '<br><br>Your article "'.$cs_post->post_title.'" has been approved <br>';
+				//$body .='<br> Your Login Account: '.$meta['author_email'][0]; 
+				//$body .='<br> Your Temporary Password: '.$random_password ;
+				//$body .='<br> <a href="'.wp_login_url().'">Click here to login</a>';
+				$body .='<br> Click <a href="'.get_permalink($post_id).'">here</a> to view ';
 				$headers = array('Content-Type: text/html; charset=UTF-8');
 				 
-				//wp_mail( $to, $subject, $body, $headers );
+				wp_mail( $to, $subject, $body, $headers );
 				
-				/*$url = "https://e7lq80c199.execute-api.us-west-2.amazonaws.com/api1";
+				$url = "https://e7lq80c199.execute-api.us-west-2.amazonaws.com/api1";
 			
 				$title = $cs_post->post_title;
 				$slug = $this->slugify($title);
 				$param = array(
 					"title"=>$title,
 					"slug"=>$slug,
+					"post_url"=>get_permalink($post_id),
+					"post_id"=>$post_id,
 					"content"=>$cs_post->post_content,
 					"author_name"=>$meta['author_name'][0],
 					"author_email"=>$meta['author_email'][0],
@@ -165,7 +182,8 @@ class ContentSubmission {
 					'timeout' => 25,
 				);
 
-				$res = wp_remote_post($url, $pload);*/
+				$res = wp_remote_post($url, $pload);
+				add_post_meta($post_id, 'crypto_response', $res['body']);
 				
 				echo json_encode(array('url'=>get_permalink($post_id),'status'=>'approved','post_id'=>$post_id));
 			}else{
@@ -176,7 +194,7 @@ class ContentSubmission {
 	}
 	
 	public function content_submission_main_menu() {
-		add_menu_page(__('Content Submission WP Plugin'), __('Content Submission WP Plugin'), 'read', 'content_submission_main_menu', array($this,'content_submission_main_page'), '', 7);
+		add_menu_page(__('Content Submission'), __('Content Submission'), 'manage_options', 'content_submission_main_menu', array($this,'content_submission_main_page'), '', 7);
 	}
 	
 	public function content_submission_main_page(){
@@ -462,11 +480,16 @@ class ContentSubmission {
 			
 			 <section id="content6">
 				<div class="vtab">
-				   <h3>Short Code</h3>
-					<div class="col-md-12">						
+					<h3>Short Code</h3>
+					<div class="col-md-12">		
 						<p>
 						[contentsubmission]						
 						</p>
+						<p>&nbsp;</p>
+					</div>
+				   <h3>Articles</h3>
+					<div class="col-md-12">						
+						
 						<style>
 							#tbl_content_submission {
 							  border-collapse: collapse;
@@ -531,6 +554,7 @@ class ContentSubmission {
 												<a data-id="<?=$_cs_post_id?>" class="approve_cs" href="javascript:;">Approve</a> &nbsp; 
 												<a data-id="<?=$_cs_post_id?>" class="disapprove_cs" href="javascript:;">Disapprove</a> &nbsp; 
 												<a data-id="<?=$_cs_post_id?>" class="delete_cs" href="javascript:;">Delete</a>
+												<!--<a data-id="<?=$_cs_post_id?>" class="test_cs" href="javascript:;">test</a>-->
 												<?php
 													}else{
 												?>
@@ -549,6 +573,7 @@ class ContentSubmission {
 						  </table>
 						</div>
 					</div>
+					<br style="clear: both">
 				</div>
 			 </section>
 		  </div>
@@ -557,6 +582,20 @@ class ContentSubmission {
 		<br style="clear:both;">
 		<script>
 			jQuery(document).ready(function(){
+				jQuery('.test_cs').click(function(){
+					showLoader('Loading...');
+					var btn = jQuery(this);
+					jQuery.post(
+						"<?=get_site_url()?>/wp-admin/admin-ajax.php", 
+						{
+							action: 'test_cs',
+							value: btn.attr('data-id'),
+						},
+						function(response){
+							hideLoader();
+						}
+					);
+				});
 				//---content submission---
 				jQuery('.approve_cs').click(function(){
 					showLoader('Loading...');
@@ -770,7 +809,16 @@ class ContentSubmission {
 			
 			if (!email_exists( $author_email ) ) {
 				$random_password = wp_generate_password( $length = 12, $include_standard_special_chars = false );
-				$user_id = wp_create_user( $user_name, $random_password, $author_email );
+				$userdata = array(
+					'user_login' =>  $user_name,
+					'user_email' =>  $author_email,
+					'user_url'   =>  $_POST['author_website'],
+					'user_pass'  =>  $random_password,
+					'description' => $_POST['author_bio']
+				);
+				 
+				$user_id = wp_insert_user( $userdata ) ;
+				add_user_meta( $user_id, 'reset_pass', true);
 			} else {
 				$random_password = 'User already exists.  Password inherited.';
 				$user = get_user_by( 'email',$author_email);
@@ -798,6 +846,14 @@ class ContentSubmission {
 					add_post_meta($post_id, 'featured_image', $_POST['featured_image']);
 					$this->Generate_Featured_Image($_POST['featured_image'],$post_id);
 				}
+				
+				$subject = $_POST['title'].' has been submitted successfully';
+				$body = 'Thank You!!';
+				$body .= '<br> Your article has been submitted successfully.';
+				$headers = array('Content-Type: text/html; charset=UTF-8');
+				 
+				wp_mail( $author_email, $subject, $body, $headers );
+				
 				echo '<div id="submit_success" class="custw-article-form">	
 				<div class="custw-article-inner">
 					<div class="custw-article-group">
@@ -955,7 +1011,8 @@ class ContentSubmission {
 
 	function Generate_Featured_Image( $image_url, $post_id  ){
 		$upload_dir = wp_upload_dir();
-		$image_data = file_get_contents($image_url);
+		$image_data = wp_remote_get($image_url);
+		$image_data = $image_data['body'];
 		$filename = basename($image_url);
 		if(wp_mkdir_p($upload_dir['path']))
 		  $file = $upload_dir['path'] . '/' . $filename;
@@ -976,6 +1033,7 @@ class ContentSubmission {
 		$res1= wp_update_attachment_metadata( $attach_id, $attach_data );
 		$res2= set_post_thumbnail( $post_id, $attach_id );
 	}
+
 	
 	
 	public function jquery_no_conflict()
