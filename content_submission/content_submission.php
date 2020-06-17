@@ -9,6 +9,21 @@ Author: contrib.com
 class ContentSubmission {
 	private static $instance;
 	protected $templates;
+	private $cs_no_token = 1;
+	private $cs_submit_msg1 = 
+		"Your article has been submitted successfully.\n\n".
+		"Thank You!!";
+	private $cs_approve_msg1 = 
+		"Congratulations!\n\n".
+		"Your article titled : {{article}} is now approved for site contribution and you will receive {{token}} CTB tokens shortly.".
+		"\n\n".
+		"\n\n".
+		"{{sitename}}";
+	
+	private $cs_disapprove_msg1 = 
+		"Your article unfortunately is not relevant or is not complementing to our brand. Thank you for your submission.".
+		"\n\n".
+		"admin";
 	
 	public static function get_instance() {
 		if ( null == self::$instance ) {
@@ -23,6 +38,11 @@ class ContentSubmission {
 		add_action( 'wp_ajax_approve_cs', array($this,'approve_cs' ));
 		add_action( 'wp_ajax_delete_cs', array($this,'delete_cs' ));
 		add_action( 'wp_ajax_disapprove_cs', array($this,'disapprove_cs' ));
+		
+		add_action( 'wp_ajax_savecsmessage', array($this,'savecsmessage' ));
+		
+		add_action( 'wp_ajax_savecssettings', array($this,'savecssettings' ));
+		
 		add_action('admin_menu', array($this,'content_submission_main_menu'));
 
 		add_shortcode( 'contentsubmission', array($this,'content_submission_shortcode' ));
@@ -75,6 +95,55 @@ class ContentSubmission {
 		die();
 	}
 	
+	public function savecssettings()
+	{
+		$cs_no_token = $_POST['cs_no_token'];
+		$no_token = get_option('cs_no_token');
+		if(!empty($no_token)){
+			update_option('cs_no_token',$cs_no_token);
+		}else{
+			if(add_option('cs_no_token',$cs_no_token)===false){
+				update_option('cs_no_token',$cs_no_token);
+			}
+		}
+	}
+	
+	public function savecsmessage()
+	{
+		$cs_approve_msg1 = $_POST['cs_approve_msg1'];
+		$cs_disapprove_msg1 = $_POST['cs_disapprove_msg1'];
+		$cs_submit_msg1 = $_POST['cs_submit_msg1'];
+		
+		$approve_msg = get_option('cs_approve_msg1');
+		$disapprove_msg = get_option('cs_disapprove_msg1');
+		$submit_msg = get_option('cs_submit_msg1');
+		
+		
+		if(!empty($approve_msg)){
+			update_option('cs_approve_msg1',$cs_approve_msg1);
+		}else{
+			if(add_option('cs_approve_msg1',$cs_approve_msg1)===false){
+				update_option('cs_approve_msg1',$cs_approve_msg1);
+			}
+		}
+		
+		if(!empty($disapprove_msg)){
+			update_option('cs_disapprove_msg1',$cs_disapprove_msg1);
+		}else{
+			if(add_option('cs_disapprove_msg1',$cs_disapprove_msg1)===false){
+				update_option('cs_disapprove_msg1',$cs_disapprove_msg1);
+			}
+		}
+		
+		if(!empty($submit_msg)){
+			update_option('cs_submit_msg1',$cs_submit_msg1);
+		}else{
+			if(add_option('cs_submit_msg1',$cs_submit_msg1)===false){
+				update_option('cs_submit_msg1',$cs_submit_msg1);
+			}
+		}
+	}
+	
 	public function disapprove_cs()
 	{
 		$cs_post_id = $_POST['value'];
@@ -85,9 +154,26 @@ class ContentSubmission {
 			$cs_post = get_post( $cs_post_id );
 			
 			$subject = 'Your article "'.$cs_post->post_title.'" has been disapproved';
-			$body = "$author_name, ";
-			$body .= '<br> As much as we would like to accept your contributed post/article, we feel it can still be improved upon.';
-			$body .= '<br> Please resubmit or let us know if you feel that you deserve a spot in our site :)';
+			
+			$cs_disapprove_msg1 = get_option('cs_disapprove_msg1');
+			if(empty($cs_disapprove_msg1)){
+				$cs_disapprove_msg1 = $this->cs_disapprove_msg1;
+			}
+			
+			$cs_disapprove_msg1 = preg_replace("/{{name}}/",$author_name,$cs_disapprove_msg1);
+			$cs_disapprove_msg1 = preg_replace("/{{sitename}}/",get_bloginfo('name'),$cs_disapprove_msg1);
+			
+			$cs_no_token = get_option('cs_no_token');
+			$cs_no_token = empty($cs_no_token) ? 1:$cs_no_token ;
+			
+			$cs_disapprove_msg1 = preg_replace("/{{token}}/",$cs_no_token,$cs_disapprove_msg1);
+			$cs_disapprove_msg1 = preg_replace("/{{article}}/",$cs_post->post_title,$cs_disapprove_msg1);
+			$cs_disapprove_msg1 = preg_replace("/{{link}}/",get_permalink($cs_post_id),$cs_disapprove_msg1);
+			
+			$cs_disapprove_msg1 = nl2br($cs_disapprove_msg1);
+			
+			$body = $cs_disapprove_msg1;
+			
 			$headers = array('Content-Type: text/html; charset=UTF-8');
 			 
 			wp_mail( $to, $subject, $body, $headers );
@@ -139,12 +225,30 @@ class ContentSubmission {
 				$cs_post = get_post( $cs_post_id );
 				
 				$subject = 'Congratulations! your article "'.$cs_post->post_title.'" has been approved';
-				$body = "Congratulations $author_name,";
-				$body .= '<br><br>Your article "'.$cs_post->post_title.'" has been approved <br>';
+				
+				$cs_approve_msg1 = get_option('cs_approve_msg1');
+				if(empty($cs_approve_msg1)){
+					$cs_approve_msg1 = $this->cs_approve_msg1;
+				}
+				
+				$cs_approve_msg1 = preg_replace("/{{name}}/",$meta['author_name'][0],$cs_approve_msg1);
+				$cs_approve_msg1 = preg_replace("/{{sitename}}/",get_bloginfo('name'),$cs_approve_msg1);
+				
+				$cs_no_token = get_option('cs_no_token');
+				$cs_no_token = empty($cs_no_token) ? 1:$cs_no_token ;
+				
+				$cs_approve_msg1 = preg_replace("/{{token}}/",$cs_no_token,$cs_approve_msg1);
+				$cs_approve_msg1 = preg_replace("/{{article}}/",$cs_post->post_title,$cs_approve_msg1);
+				
+				$cs_approve_msg1 = preg_replace("/{{link}}/",get_permalink($post_id),$cs_approve_msg1);
+				
+				$cs_approve_msg1 = nl2br($cs_approve_msg1);
+				$body = $cs_approve_msg1;
+				
 				//$body .='<br> Your Login Account: '.$meta['author_email'][0]; 
 				//$body .='<br> Your Temporary Password: '.$random_password ;
 				//$body .='<br> <a href="'.wp_login_url().'">Click here to login</a>';
-				$body .='<br> Click <a href="'.get_permalink($post_id).'">here</a> to view ';
+				
 				$headers = array('Content-Type: text/html; charset=UTF-8');
 				 
 				wp_mail( $to, $subject, $body, $headers );
@@ -153,6 +257,10 @@ class ContentSubmission {
 			
 				$title = $cs_post->post_title;
 				$slug = $this->slugify($title);
+				
+				$cs_no_token = get_option('cs_no_token');
+				$cs_no_token = empty($cs_no_token) ? 1:$cs_no_token ;
+			
 				$param = array(
 					"title"=>$title,
 					"slug"=>$slug,
@@ -165,6 +273,7 @@ class ContentSubmission {
 					"author_website"=>$meta['author_website'][0],
 					"image"=>$meta['featured_image'][0],
 					"domain"=>$_SERVER['SERVER_NAME'],
+					"token_amount"=>$cs_no_token,
 					"type"=>"article",
 					"key"=>"5c1bde69a9e783c7edc2e603d8b25023",
 					"request"=>"wp-contentsubmission"
@@ -200,8 +309,7 @@ class ContentSubmission {
 	public function content_submission_main_page(){
 
 	?>
-	
-		<style>
+	<style>
 		@import url("https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css");
 		/* 1 column: 320px */
 		.vnoc-custom-plugin {
@@ -285,11 +393,10 @@ class ContentSubmission {
 		  padding: 20px 50px 50px;
 		  margin: 0 auto;
 		  background: #fff;
-		  
 		}
 
 		.vcp-tab-main section {
-		  /*display: none;*/
+		  display: none;
 		  padding: 20px 15px 20px;
 		  border: 1px solid #ddd;
 		}
@@ -319,7 +426,7 @@ class ContentSubmission {
 		  cursor: pointer;
 		}
 
-		.vcp-tab-main input + label {
+		.vcp-tab-main input:checked + label {
 		  color: #555;
 		  border: 1px solid #ddd;
 		  border-top: 2px solid orange;
@@ -469,24 +576,136 @@ class ContentSubmission {
 		   border-radius: 3px;
 		}
 		</style>
-
+		
 		<div class="vnoc-custom-plugin">
+			
 		   <!-- tab section -->
 		   <div class="clear-section"></div>
 		   <div class="vcp-tab-main">
-			
-			 <input id="tab6" type="radio" name="tabs">
-			 <label id="contentsubmission" for="tab6">Content Submission</label>
-			
-			 <section id="content6">
+			 <input id="tab1" type="radio" name="tabs" checked="">
+			 <label id="lcustomfooter" for="tab1">SETTINGS </label>
+
+			 <input id="tab2" type="radio" name="tabs">
+			 <label id="lcustompage" for="tab2">MESSAGING </label>
+
+			 <input id="tab3" type="radio" name="tabs">
+			 <label id="lcontribwidget" for="tab3">CONTENT SUBMISSION</label>
+
+			 <section id="content1">
+				<?php
+					$cs_no_token = get_option('cs_no_token');
+					if(empty($cs_no_token)){
+						$cs_no_token = $this->cs_no_token;
+					}
+				?>
 				<div class="vtab">
 					<h3>Short Code</h3>
-					<div class="col-md-12">		
+					<div class="col-md-12">
 						<p>
 						[contentsubmission]						
-						</p>
-						<p>&nbsp;</p>
+						</p>						
 					</div>
+					
+					<h3>&nbsp;</h3>
+					<div class="col-md-12">
+						NO. OF TOKENS <input value="<?=$cs_no_token?>" style="display: inline-block;" type="text" id="cs_no_token" name="cs_no_token" /> PER APPROVED
+						<button type="button" id="btn-cs-settings" class="btn btn-default">Save</button>
+					</div>
+				</div>
+				<script type="text/javascript">
+					jQuery(document).ready(function(){
+						jQuery('#btn-cs-settings').click(function(){
+							var b = jQuery(this);
+							b.attr('disabled', 'disabled').html("Saving...");
+							jQuery.post(
+								"<?=get_site_url()?>/wp-admin/admin-ajax.php", 
+								{
+									action: 'savecssettings',
+									cs_no_token: jQuery('#cs_no_token').val()
+								}, 
+								function(response){
+									b.removeAttr('disabled').html('Save');
+								});
+						});
+					});
+				</script>
+				
+			 </section>
+
+			 <section id="content2">
+				<div class="vtab">					
+					<div class="col-md-12">						
+						<p>
+							{{name}} = Name of author
+							<br>
+							{{sitename}} = Site name
+							<br>
+							{{token}} = Number of token
+							<br>
+							{{article}} = Article title
+							<br>
+							{{link}} = Article url
+						</p>
+						
+					</div>
+				</div>
+				<div class="vtab">
+					<form>
+						<?php
+							$cs_approve_msg1 = get_option('cs_approve_msg1');
+							if(empty($cs_approve_msg1)){
+								$cs_approve_msg1 = $this->cs_approve_msg1;
+							}
+							
+							$cs_disapprove_msg1 = get_option('cs_disapprove_msg1');
+							if(empty($cs_disapprove_msg1)){
+								$cs_disapprove_msg1 = $this->cs_disapprove_msg1;
+							}
+							
+							$cs_submit_msg1 = get_option('cs_submit_msg1');
+							if(empty($cs_submit_msg1)){
+								$cs_submit_msg1 = $this->cs_submit_msg1;
+							}
+						?>
+						<div class="form-group">
+							<label for="">Submit Message</label>
+							<textarea rows=7 id="cs_submit_msg1" class="form-control"><?=$cs_submit_msg1?></textarea>
+						</div>
+						<div class="form-group">
+							<label for="">Approve Message</label>
+							<textarea rows=7 id="cs_approve_msg1" class="form-control"><?=$cs_approve_msg1?></textarea>
+						</div>
+						<div class="form-group">
+							<label for="">Disapprove Message</label>
+							<textarea rows=7 id="cs_disapprove_msg1" class="form-control"><?=$cs_disapprove_msg1?></textarea>
+						</div>
+						<button type="button" id="btn-cs-message" class="btn btn-default">Save</button>
+					</form>
+					<script type="text/javascript">
+						jQuery(document).ready(function(){
+							jQuery('#btn-cs-message').click(function(){
+								var b = jQuery(this);
+								b.attr('disabled', 'disabled').html("Saving...");
+								jQuery.post(
+									"<?=get_site_url()?>/wp-admin/admin-ajax.php", 
+									{
+										action: 'savecsmessage',
+										cs_submit_msg1: jQuery('#cs_submit_msg1').val(),
+										cs_approve_msg1: jQuery('#cs_approve_msg1').val(),
+										cs_disapprove_msg1: jQuery('#cs_disapprove_msg1').val(),
+									}, 
+									function(response){
+										b.removeAttr('disabled').html('Save');
+									});
+							});
+						});
+					</script>
+				</div>
+			 </section>
+
+			 <section id="content3">
+				<div class="vtab">
+					
 				   <h3>Articles</h3>
 					<div class="col-md-12">						
 						
@@ -521,6 +740,7 @@ class ContentSubmission {
 									'post_status' => 'draft',
 									'orderby' => 'post_date', 
 									'order' => 'DESC', 
+									'posts_per_page'=>-1
 								);
 
 								$loop = new WP_Query( $args ); 
@@ -550,16 +770,16 @@ class ContentSubmission {
 												<?php 
 													if($status=='pending'){
 												?>
-												<a class="view" target="_blank" href="<?=$cs_link?>">View</a> &nbsp; 
-												<a data-id="<?=$_cs_post_id?>" class="approve_cs" href="javascript:;">Approve</a> &nbsp; 
-												<a data-id="<?=$_cs_post_id?>" class="disapprove_cs" href="javascript:;">Disapprove</a> &nbsp; 
-												<a data-id="<?=$_cs_post_id?>" class="delete_cs" href="javascript:;">Delete</a>
+												<a class="view" target="_blank" href="<?=$cs_link?>">[View]</a> &nbsp; 
+												<a data-id="<?=$_cs_post_id?>" class="approve_cs" href="javascript:;">[Approve]</a> &nbsp; 
+												<a data-id="<?=$_cs_post_id?>" class="disapprove_cs" href="javascript:;">[Disapprove]</a> &nbsp; 
+												<a data-id="<?=$_cs_post_id?>" class="delete_cs" href="javascript:;">[Delete]</a>
 												<!--<a data-id="<?=$_cs_post_id?>" class="test_cs" href="javascript:;">test</a>-->
 												<?php
 													}else{
 												?>
-													<a class="view" target="_blank" href="<?=$link?>">View</a> &nbsp; 
-													<a data-id="<?=$_cs_post_id?>" class="delete_cs" href="javascript:;">Delete</a>
+													<a class="view" target="_blank" href="<?=$link?>">[View]</a> &nbsp; 
+													<a data-id="<?=$_cs_post_id?>" class="delete_cs" href="javascript:;">[Delete]</a>
 												<?php
 													}
 												?>
@@ -576,9 +796,13 @@ class ContentSubmission {
 					<br style="clear: both">
 				</div>
 			 </section>
+
 		  </div>
 		   <!-- end tab-->
 		</div>
+		   
+		   
+		
 		<br style="clear:both;">
 		<script>
 			jQuery(document).ready(function(){
@@ -747,6 +971,36 @@ class ContentSubmission {
 				padding: 12px 20px 12px 40px;
 				resize: none;
 			}
+			input[type=text].custw-form-control {	
+				background-image: url("https://cdn.vnoc.com/icons/icon-contrib-write-1.png");
+				background-size: 21px 21px;
+				background-position: 10px 10px; 
+				background-repeat: no-repeat;
+				padding: 12px 20px 12px 40px;
+			}
+			input[type=url].custw-form-control {	
+				background-image: url("https://cdn.vnoc.com/icons/icon-contrib-write-1.png");
+				background-size: 21px 21px;
+				background-position: 10px 10px; 
+				background-repeat: no-repeat;
+				padding: 12px 20px 12px 40px;
+			}
+			input[type=email].custw-form-control {	
+				background-image: url("https://cdn.vnoc.com/icons/icon-contrib-write-1.png");
+				background-size: 21px 21px;
+				background-position: 10px 10px; 
+				background-repeat: no-repeat;
+				padding: 12px 20px 12px 40px;
+			}
+			textarea.custw-form-control {
+				height: 120px;
+				background-image: url("https://cdn.vnoc.com/icons/icon-contrib-write-1.png");
+				background-size: 21px 21px;
+				background-position: 10px 10px; 
+				background-repeat: no-repeat;
+				padding: 12px 20px 12px 40px;
+				resize: none;
+			}
 			input[type=submit].custw-form-button {
 				font-family: inherit;
 				background-color: #4CAF50;
@@ -847,9 +1101,29 @@ class ContentSubmission {
 					$this->Generate_Featured_Image($_POST['featured_image'],$post_id);
 				}
 				
+				$cs_submit_msg1 = get_option('cs_submit_msg1');
+				
+				if(empty($cs_submit_msg1)){
+					$cs_submit_msg1 = $this->cs_submit_msg1;
+				}
+				
+				$cs_submit_msg1 = preg_replace("/{{name}}/",$_POST['author_name1'],$cs_submit_msg1);
+				
+				$cs_submit_msg1 = preg_replace("/{{sitename}}/",get_bloginfo('name'),$cs_submit_msg1);
+				
+				$cs_no_token = get_option('cs_no_token');
+				$cs_no_token = empty($cs_no_token) ? 1:$cs_no_token ;
+				
+				$cs_submit_msg1 = preg_replace("/{{token}}/",$cs_no_token,$cs_submit_msg1);
+				$cs_submit_msg1 = preg_replace("/{{article}}/",$_POST['title'],$cs_submit_msg1);
+				$cs_submit_msg1 = preg_replace("/{{link}}/",get_permalink($post_id),$cs_submit_msg1);
+				
+				
+				$cs_submit_msg1 = nl2br($cs_submit_msg1);
+				
 				$subject = $_POST['title'].' has been submitted successfully';
-				$body = 'Thank You!!';
-				$body .= '<br> Your article has been submitted successfully.';
+				$body = $cs_submit_msg1;
+				
 				$headers = array('Content-Type: text/html; charset=UTF-8');
 				 
 				wp_mail( $author_email, $subject, $body, $headers );
