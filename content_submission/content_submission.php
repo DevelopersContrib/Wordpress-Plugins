@@ -575,6 +575,9 @@ class ContentSubmission {
 		   margin-bottom: 25px;
 		   border-radius: 3px;
 		}
+		.vtab #tbl_content_submission td, th {
+			padding: 8px;
+		}
 		</style>
 		
 		<div class="vnoc-custom-plugin">
@@ -610,6 +613,9 @@ class ContentSubmission {
 					<div class="col-md-12">
 						NO. OF TOKENS <input value="<?=$cs_no_token?>" style="display: inline-block;" type="text" id="cs_no_token" name="cs_no_token" /> PER APPROVED
 						<button type="button" id="btn-cs-settings" class="btn btn-default">Save</button>
+					</div>
+					<div>
+						<br>
 					</div>
 				</div>
 				<script type="text/javascript">
@@ -707,7 +713,7 @@ class ContentSubmission {
 				<div class="vtab">
 					
 				   <h3>Articles</h3>
-					<div class="col-md-12">						
+					<div class="col-md-121">						
 						
 						<style>
 							#tbl_content_submission {
@@ -924,7 +930,7 @@ class ContentSubmission {
 			.custw-article-form {
 				background: #f5f0f0;
 				padding: 10px;
-				border: 2px solid #ccc;
+				border: 1px solid #ccc;
 				border-radius: 4px;
 				margin: 10px 5px;
 			}
@@ -934,7 +940,7 @@ class ContentSubmission {
 				width: 100%;	
 				font-size: 1.1rem;
 				box-sizing: border-box;
-				border: 2px solid #ccc;
+				border: 1px solid #ccc;
 				border-radius: 4px;
 				margin-bottom: 1rem;
 			}
@@ -1021,7 +1027,7 @@ class ContentSubmission {
 				margin-bottom: 1rem;
 			}
 			.custw-success-alert {
-				background: #d4edda;
+				background: #ffffff;
 				box-sizing: border-box;
 				border: 2px solid #c3e6cb;
 				border-radius: 4px;
