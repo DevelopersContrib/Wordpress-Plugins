@@ -43,7 +43,7 @@ class Referrals {
 			
 			if(empty($referrals_api_key)){ //create api key
 				$headers = array('Accept: application/json');
-		    	$url = "http://www.api.referrals.com/member/createapi";
+		    	$url = "https://api.referrals.com/member/createapi";
 		    	$param = array('token'=>$token->access_token);
 			    $result =  $this->createApiCall($url, 'POST', $headers, $param);
 		   	    $res = json_decode($result,true);
@@ -224,7 +224,7 @@ class Referrals {
 							if(empty($error)){
 								$headers = array('Accept: application/json');
 								
-								$url = "http://www.api.referrals.com/member/add?api_key=".$API_KEY;
+								$url = "https://api.referrals.com/member/add?api_key=".$API_KEY;
 								$param = array('name'=>$name,'email'=>$email,'name'=>$name,'password'=>$password,'website'=>$website);
 								$result =  $this->createApiCall($url, 'POST', $headers, $param);
 								$res = json_decode($result,true);
@@ -241,7 +241,7 @@ class Referrals {
 						<div class="container register">
 							<div class="row justify-content-center">
 								<div class="col-md-3 register-left">
-									<img src="https://image.flaticon.com/icons/png/512/117/117992.png" alt="Brand.com"/>
+									<img src="https://d1p6j71028fbjm.cloudfront.net/logos/logo-new-referral-1.png" alt="Referrals.com"/>
 									<h3>Welcome!</h3>
 									<?php
 										$referrals_api_key = get_user_meta( $user_id, 'referrals_api_key', true ); 
@@ -302,7 +302,7 @@ class Referrals {
 														<input type="password" class="form-control" oninput="checkPasscode();" placeholder="Confirm Password *" id="signup_password2" value="" required />
 													</div>
 													<div class="form-group">
-														<input name="signup_website" id="signup_website" type="url" class="form-control" placeholder="e.g. http://" value="<?=$website?>" required />
+														<input name="signup_website" id="signup_website" type="url" class="form-control" placeholder="e.g. https://" value="<?=$website?>" required />
 													</div>
 													<span style="color:red;"><?=$error?></span>
 													<button type="submit" class="btnRegister">Signup</button>
@@ -368,7 +368,7 @@ class Referrals {
 		
 		if(!empty($referrals_api_key)){
 			$headers = array('Accept: application/json');
-			$url = "http://www.api.referrals.com/brand/getbrands?api_key=".$referrals_api_key;
+			$url = "https://api.referrals.com/brand/getbrands?api_key=".$referrals_api_key;
 			$param = array('token'=>$referrals_token);
 			$result =  $this->createApiCall($url, 'POST', $headers, $param);
 			$res = json_decode($result,true);
@@ -377,7 +377,7 @@ class Referrals {
 			if(!empty($_POST['brand'])){
 				$brand_id = $_POST['brand'];
 				$headers = array('Accept: application/json');
-				$url = "http://www.api.referrals.com/campaign/getcampaigns?api_key=".$referrals_api_key;
+				$url = "https://api.referrals.com/campaign/getcampaigns?api_key=".$referrals_api_key;
 				$param = array('token'=>$referrals_token,'brand_id'=>$_POST['brand']);
 				$result =  $this->createApiCall($url, 'POST', $headers, $param);
 				$res = json_decode($result,true);
